@@ -23,6 +23,7 @@ tailwind.config = {
 }
 </script>
 <style>
+  :root { --focus-color: #12b76a; --focus-ring: rgba(18,183,106,0.4); }
   * { -webkit-tap-highlight-color: transparent; }
   html,body { background:#f1f5f9; min-height:100dvh; display:flex; flex-direction:column; transition: background .4s ease; }
   html.dark, html.dark body { background:#0a0a0a; }
@@ -30,14 +31,11 @@ tailwind.config = {
   .disp { font-family:'Sora',sans-serif; letter-spacing:-0.01em; }
   .mono { font-family:'JetBrains Mono',monospace; }
   .hide-scrollbar::-webkit-scrollbar{display:none} .hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-  
-  /* Advanced Glassmorphism Styles */
   .glass { background:rgba(255,255,255,0.65); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.7); box-shadow: 0 8px 32px rgba(0,0,0,0.04); }
   .dark .glass { background:rgba(20,20,20,0.45); border:1px solid rgba(255,255,255,0.06); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-  
   .glass-input { background:rgba(255,255,255,0.5); backdrop-filter:blur(12px); border:1px solid rgba(0,0,0,0.05); }
   .dark .glass-input { background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.05); }
-
+  .dyn-focus:focus { border-color: var(--focus-color) !important; box-shadow: 0 0 0 1.5px var(--focus-ring) !important; }
   .cut{ clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) }
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   .fade-in{animation:fadeIn .4s cubic-bezier(.16,1,.3,1) forwards} @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -63,22 +61,16 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- Global Developer Credit Header -->
-<div class="fixed top-0 inset-x-0 z-[100] w-full bg-white/40 dark:bg-black/40 backdrop-blur-md border-b border-white/20 dark:border-white/5 py-1.5 flex justify-center items-center text-[10px] sm:text-[11px] font-semibold text-slate-500">
-  <span class="flex items-center gap-1.5">Developed by <span class="text-vEmerald font-bold">Rahat</span> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a></span>
-</div>
-
-<div id="root" class="flex-1 flex flex-col w-full h-full relative pt-[30px]"></div>
+<div id="root" class="flex-1 flex flex-col w-full h-full relative"></div>
 
 <div id="modalContainer" class="fixed inset-0 bg-slate-900/60 dark:bg-black/80 z-[100] hidden flex justify-center items-center px-4 backdrop-blur-md overflow-y-auto py-8"></div>
 <div id="pinContainer" class="fixed inset-0 bg-slate-900/70 dark:bg-black/85 z-[150] hidden flex justify-center items-end backdrop-blur-md"></div>
 <div id="toast-container" class="fixed top-8 right-4 z-[300] flex flex-col gap-2 pointer-events-none"></div>
 
-<!-- Cropper Modal -->
 <div id="cropperModal" class="fixed inset-0 bg-black/95 z-[999] hidden flex-col touch-none">
   <div class="flex-1 relative overflow-hidden" id="cropperArea">
-    <img id="cropperImg" class="absolute pointer-events-none origin-top-left">
-    <div class="absolute inset-0 pointer-events-none" style="box-shadow: 0 0 0 9999px rgba(0,0,0,0.8); border: 2px solid white; border-radius: 50%; width: 280px; height: 280px; left: 50%; top: 45%; margin-left: -140px; margin-top: -140px;">
+    <img id="cropperImg" class="absolute pointer-events-none origin-top-left" style="max-width:none!important">
+    <div class="absolute pointer-events-none" style="box-shadow: 0 0 0 9999px rgba(0,0,0,0.8); border: 2px solid white; border-radius: 50%; width: 280px; height: 280px; left: 50%; top: 50%; margin-left: -140px; margin-top: -140px;">
       <div class="absolute w-full h-1/3 top-1/3 border-y border-white/30"></div>
       <div class="absolute w-1/3 h-full left-1/3 border-x border-white/30"></div>
     </div>
@@ -99,7 +91,6 @@ tailwind.config = {
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/+esm';
 
-/* ---------------- i18n Dictionary ---------------- */
 window.lang = localStorage.getItem('vault_lang') || 'en';
 const LANG = {
   bn: {
@@ -110,12 +101,10 @@ const LANG = {
     total_in: "মোট আয়", total_out: "মোট ব্যয়", balance: "ফান্ডে আছে",
     recent: "সাম্প্রতিক লেনদেন", see_all: "সব দেখুন", no_txns: "এখনো কোনো এন্ট্রি নেই।",
     new_entry: "নতুন এন্ট্রি", income: "আয়", expense: "ব্যয়",
-    amount_label: "পরিমাণ (৳)", where_label: "কোথায় আয়/ব্যয় হয়েছে?", note_label: "নোট (ঐচ্ছিক)", date_label: "তারিখ", save: "সেভ করুন",
+    amount_label: "পরিমাণ (৳)", where_label: "কোথায় আয়/ব্যয় হয়েছে?", note_label: "নোট (ঐচ্ছিক)", save: "সেভ করুন",
     history_title: "সম্পূর্ণ হিস্ট্রি", search: "খুঁজুন...", all: "সব", del: "মুছুন",
-    sec_pin: "নিরাপত্তা পিন", change_pin: "পিন পরিবর্তন করুন",
-    feedback: "ডেভেলপার ফিডব্যাক", dev_contact: "যোগাযোগ করুন",
-    danger: "বিপদজনক অঞ্চল", reset_all: "সম্পূর্ণ হিস্ট্রি রিসেট করুন", delete_account: "অ্যাকাউন্ট ও ডেটা ডিলিট করুন",
-    logout: "লগআউট", lang_switch: "Switch to English", exit_admin: "অ্যাডমিন প্যানেল থেকে প্রস্থান",
+    change_pin: "পিন পরিবর্তন করুন", danger: "বিপদজনক অঞ্চল", reset_all: "সম্পূর্ণ হিস্ট্রি রিসেট করুন",
+    delete_account: "অ্যাকাউন্ট ও ডেটা ডিলিট করুন", logout: "লগআউট", lang_switch: "Switch to English", exit_admin: "অ্যাডমিন প্যানেল থেকে প্রস্থান",
     save_success: "এন্ট্রি সেভ হয়েছে!", req_fields: "পরিমাণ ও উৎস দিন"
   },
   en: {
@@ -126,18 +115,15 @@ const LANG = {
     total_in: "Total Income", total_out: "Total Expense", balance: "Balance",
     recent: "Recent Transactions", see_all: "See All", no_txns: "No entries yet.",
     new_entry: "New Entry", income: "Income", expense: "Expense",
-    amount_label: "Amount (৳)", where_label: "Source / Destination?", note_label: "Note (Optional)", date_label: "Date", save: "Save Entry",
+    amount_label: "Amount (৳)", where_label: "Source / Destination?", note_label: "Note (Optional)", save: "Save Entry",
     history_title: "Full History", search: "Search...", all: "All", del: "Delete",
-    sec_pin: "Security PIN", change_pin: "Change PIN",
-    feedback: "Developer Feedback", dev_contact: "Contact Developer",
-    danger: "Danger Zone", reset_all: "Reset Full History", delete_account: "Delete Account & Data",
-    logout: "Logout", lang_switch: "Switch to Bengali", exit_admin: "Exit Admin Mode",
+    change_pin: "Change PIN", danger: "Danger Zone", reset_all: "Reset Full History",
+    delete_account: "Delete Account & Data", logout: "Logout", lang_switch: "Switch to Bengali", exit_admin: "Exit Admin Mode",
     save_success: "Entry saved!", req_fields: "Amount and Source required"
   }
 };
 window._t = (key) => LANG[window.lang][key] || key;
 
-/* ---------------- state ---------------- */
 window.supa = null; window.session = null; window.profile = null;
 window.adminToken = localStorage.getItem('vault_admin_token') || null;
 window.activeTab = localStorage.getItem('vault_tab') || 'dashboard';
@@ -155,7 +141,6 @@ const formatDate = (dateObj) => {
   return `${BN_MONTHS[dateObj.getMonth()]} ${bnNum(dateObj.getDate())}, ${bnNum(dateObj.getFullYear())}`;
 };
 
-/* ---------------- toast / modal ---------------- */
 window.showToast = (msg, type='success') => {
   const c = document.getElementById('toast-container');
   const t = document.createElement('div');
@@ -174,7 +159,6 @@ window.showModal = (html) => {
 };
 window.hideModal = () => document.getElementById('modalContainer').classList.add('hidden');
 
-/* ---------------- floating PIN keypad (Always English & Keyboard Support) ---------------- */
 let pinResolve, pinReject, pinEntered = '';
 window.askPin = (title, subtitle='') => {
   return new Promise((resolve, reject) => {
@@ -206,11 +190,9 @@ window.pinKey = (k) => {
   if (k === 'cancel') { document.getElementById('pinContainer').classList.add('hidden'); pinReject(new Error('cancelled')); return; }
   if (k === 'back') { pinEntered = pinEntered.slice(0,-1); }
   else if (pinEntered.length < 6) { pinEntered += k; }
-  
   for(let i=0; i<6; i++){
     document.getElementById(`dot-${i}`).classList.toggle('filled', i < pinEntered.length);
   }
-  
   if (pinEntered.length === 6) { 
     setTimeout(() => { document.getElementById('pinContainer').classList.add('hidden'); pinResolve(pinEntered); }, 150); 
   }
@@ -224,7 +206,6 @@ window.handlePinKeydown = (e) => {
 };
 document.addEventListener('keydown', window.handlePinKeydown);
 
-/* ---------------- API helper ---------------- */
 window.callApi = async (path, body) => {
   const res = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
   const json = await res.json();
@@ -233,17 +214,14 @@ window.callApi = async (path, body) => {
 };
 window.notify = (event, details) => { if (window.session) window.callApi('/api/notify', { event, accessToken: window.session.access_token, details }).catch(()=>{}); };
 
-/* ---------------- auth ---------------- */
 window.loginGoogle = async () => { await window.supa.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin + window.location.pathname } }); };
 window.logout = async () => { await window.supa.auth.signOut(); window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.profile = null; window.session = null; window.render(); };
 window.exitAdmin = () => { window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.changeTab('dashboard'); };
 
-/* ---------------- data loading ---------------- */
 window.loadProfile = async () => { const { data } = await window.supa.from('profiles').select('*').eq('id', window.session.user.id).single(); window.profile = data; };
 window.loadTxns = async () => { const { data } = await window.supa.from('transactions').select('*').eq('user_id', window.session.user.id).order('txn_date', { ascending:false }).order('created_at', { ascending:false }); window.txns = data || []; };
 window.loadFeedback = async () => { const { data } = await window.supa.from('feedback').select('*').eq('user_id', window.session.user.id).order('created_at', { ascending:false }); window.feedbackList = data || []; };
 
-/* ---------------- render root ---------------- */
 window.render = () => {
   const root = document.getElementById('root');
   if (!window.session) { root.innerHTML = buildLanding(); lucide.createIcons(); return; }
@@ -253,7 +231,6 @@ window.render = () => {
   lucide.createIcons(); updateNav(); window.scrollTo(0,0);
 };
 
-/* ---------------- landing (logged out) ---------------- */
 function buildLanding(){
   return `
   <div class="flex-1 flex flex-col items-center justify-center px-6 text-center py-10 w-full max-w-md mx-auto fade-in">
@@ -267,6 +244,9 @@ function buildLanding(){
       </button>
       <p class="text-[10px] text-slate-400 mt-5 font-medium">${_t('auto_save')}</p>
     </div>
+    <div class="mt-8 text-[11px] text-slate-500 font-semibold flex items-center justify-center gap-1.5">
+      Developed by <span class="text-vEmerald font-bold">Rahat</span> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a>
+    </div>
   </div>`;
 }
 
@@ -279,11 +259,10 @@ function buildSuspended(){
   </div>`;
 }
 
-/* ---------------- app shell (logged in) ---------------- */
 function buildShell(innerHtml){
   const p = window.profile || {}; const isSuper = window.adminToken;
   return `
-  <header class="glass sticky top-[30px] z-40 border-b shadow-sm">
+  <header class="glass sticky top-0 z-40 shadow-sm border-b border-white/20 dark:border-white/5">
     <div class="max-w-3xl mx-auto flex justify-between items-center gap-2 px-4 py-3">
       <div class="flex items-center gap-3 cursor-pointer select-none" onclick="window.handleLogoTap()">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-lg"><i data-lucide="vault" class="w-5 h-5 text-[#04150c]"></i></div>
@@ -299,16 +278,19 @@ function buildShell(innerHtml){
       </div>
     </div>
   </header>
+  <div class="w-full flex justify-center py-1.5 text-[10px] text-slate-500 font-semibold border-b border-white/10 dark:border-white/5 bg-white/20 dark:bg-black/20 backdrop-blur-md z-30">
+    <span class="flex items-center gap-1.5">Developed by <span class="text-vEmerald font-bold">Rahat</span> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a></span>
+  </div>
 
-  <main class="flex-1 w-full max-w-2xl mx-auto pb-28 pt-6 px-4 md:px-6 fade-in">${innerHtml}</main>
+  <main class="flex-1 w-full max-w-2xl mx-auto pb-28 pt-4 px-4 md:px-6 fade-in">${innerHtml}</main>
 
   <nav class="fixed bottom-5 inset-x-0 mx-auto w-[92%] max-w-md glass z-40 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
-    <div class="flex justify-around items-center h-[68px] px-2">
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('dashboard')" data-tab="dashboard"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('dashboard')}</span></button>
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('add')" data-tab="add"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('add')}</span></button>
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('history')" data-tab="history"><i data-lucide="history" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('history')}</span></button>
-      ${isSuper ? `<button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('manage')" data-tab="manage"><i data-lucide="shield" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('manage')}</span></button>` : ''}
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('profile')" data-tab="profile"><i data-lucide="user-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('profile')}</span></button>
+    <div class="flex justify-around items-center h-[68px] px-1.5">
+      <button class="nav-btn flex flex-col items-center justify-center gap-1 flex-1 py-1.5 mx-0.5 transition-all" onclick="window.changeTab('dashboard')" data-tab="dashboard"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('dashboard')}</span></button>
+      <button class="nav-btn flex flex-col items-center justify-center gap-1 flex-1 py-1.5 mx-0.5 transition-all" onclick="window.changeTab('add')" data-tab="add"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('add')}</span></button>
+      <button class="nav-btn flex flex-col items-center justify-center gap-1 flex-1 py-1.5 mx-0.5 transition-all" onclick="window.changeTab('history')" data-tab="history"><i data-lucide="history" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('history')}</span></button>
+      ${isSuper ? `<button class="nav-btn flex flex-col items-center justify-center gap-1 flex-1 py-1.5 mx-0.5 transition-all" onclick="window.changeTab('manage')" data-tab="manage"><i data-lucide="shield" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('manage')}</span></button>` : ''}
+      <button class="nav-btn flex flex-col items-center justify-center gap-1 flex-1 py-1.5 mx-0.5 transition-all" onclick="window.changeTab('profile')" data-tab="profile"><i data-lucide="user-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('profile')}</span></button>
     </div>
   </nav>`;
 }
@@ -321,7 +303,13 @@ window.handleLogoTap = () => {
 function updateNav(){
   document.querySelectorAll('.nav-btn').forEach(b=>{
     const on = b.dataset.tab === window.activeTab;
-    b.classList.toggle('text-vEmerald', on); b.classList.toggle('text-slate-400', !on);
+    if(on){
+      b.classList.add('text-vEmerald', 'bg-slate-200/60', 'dark:bg-white/10', 'rounded-xl');
+      b.classList.remove('text-slate-400');
+    }else{
+      b.classList.remove('text-vEmerald', 'bg-slate-200/60', 'dark:bg-white/10', 'rounded-xl');
+      b.classList.add('text-slate-400');
+    }
   });
   const htmlDark = document.documentElement.classList.contains('dark');
   document.getElementById('themeSlider')?.classList.toggle('translate-x-[26px]', htmlDark);
@@ -329,7 +317,6 @@ function updateNav(){
 window.changeTab = (tab) => { if (tab === 'manage' && !window.adminToken) return; window.activeTab = tab; localStorage.setItem('vault_tab', tab); window.render(); };
 window.toggleTheme = () => { const html = document.documentElement; html.classList.toggle('dark'); localStorage.setItem('vault_theme', html.classList.contains('dark') ? 'dark' : 'light'); updateNav(); };
 
-/* ---------------- tab router ---------------- */
 function buildTabContent(){
   if (window.activeTab === 'dashboard') return buildDashboard();
   if (window.activeTab === 'add') return buildAdd();
@@ -339,7 +326,6 @@ function buildTabContent(){
   return buildDashboard();
 }
 
-/* ---------------- dashboard ---------------- */
 function buildDashboard(){
   const income = window.txns.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
   const expense = window.txns.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
@@ -405,7 +391,6 @@ function txnRow(t){
   </div>`;
 }
 
-/* ---------------- add transaction ---------------- */
 window._entryType = 'income';
 function buildAdd(){
   return `
@@ -413,10 +398,17 @@ function buildAdd(){
   <div class="glass rounded-[28px] p-5 md:p-7 shadow-sm">
     <div class="space-y-4">
       <div>
-        <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('amount_label')}</label>
+        <div class="flex justify-between items-center mb-1.5">
+          <label class="text-[10px] font-bold uppercase text-slate-500">${_t('amount_label')}</label>
+          <div class="relative w-8 h-8 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-colors group">
+            <input id="entryDate" type="date" value="${new Date().toISOString().split('T')[0]}" class="absolute inset-0 opacity-0 cursor-pointer z-20" onchange="document.getElementById('dateIconText').innerText = this.value.split('-')[2]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 group-hover:text-vEmerald transition-colors absolute z-0"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span id="dateIconText" class="text-[10px] font-bold mt-[7px] z-10 text-slate-700 dark:text-slate-300 pointer-events-none">${new Date().getDate().toString().padStart(2, '0')}</span>
+          </div>
+        </div>
         <div class="relative">
           <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">৳</span>
-          <input id="entryAmount" type="number" placeholder="0.00" class="w-full pl-10 pr-4 py-3 rounded-2xl glass-input text-base font-bold outline-none focus:border-vEmerald focus:ring-1 focus:ring-vEmerald/50 transition-all shadow-inner">
+          <input id="entryAmount" type="number" placeholder="0.00" class="w-full pl-10 pr-4 py-3 rounded-2xl glass-input dyn-focus text-base font-bold outline-none transition-all shadow-inner">
         </div>
       </div>
       <div class="flex gap-2 bg-slate-200/60 dark:bg-black/40 p-1 rounded-2xl shadow-inner">
@@ -425,15 +417,11 @@ function buildAdd(){
       </div>
       <div>
         <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('where_label')} *</label>
-        <input id="entrySource" placeholder="..." class="w-full px-4 py-3 rounded-2xl glass-input text-[13px] font-medium outline-none focus:border-vEmerald focus:ring-1 focus:ring-vEmerald/50 transition-all shadow-inner">
+        <input id="entrySource" placeholder="..." class="w-full px-4 py-3 rounded-2xl glass-input dyn-focus text-[13px] font-medium outline-none transition-all shadow-inner">
       </div>
       <div>
         <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('note_label')}</label>
-        <textarea id="entryNote" rows="2" class="w-full px-4 py-3 rounded-2xl glass-input text-[13px] font-medium outline-none focus:border-vEmerald focus:ring-1 focus:ring-vEmerald/50 transition-all shadow-inner"></textarea>
-      </div>
-      <div>
-        <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('date_label')}</label>
-        <input id="entryDate" type="date" value="${new Date().toISOString().split('T')[0]}" class="w-full px-4 py-3 rounded-2xl glass-input text-[13px] font-medium outline-none focus:border-vEmerald focus:ring-1 focus:ring-vEmerald/50 transition-all shadow-inner">
+        <textarea id="entryNote" rows="2" class="w-full px-4 py-3 rounded-2xl glass-input dyn-focus text-[13px] font-medium outline-none transition-all shadow-inner"></textarea>
       </div>
       <button type="button" id="entrySaveBtn" onclick="window.submitEntry()" class="w-full mt-2 py-3.5 rounded-2xl bg-vEmerald text-[#04150c] font-bold shadow-lg shadow-vEmerald/30 active:scale-[0.98] transition-all disp tracking-wide text-[15px] flex items-center justify-center gap-2"><i data-lucide="check" class="w-5 h-5"></i> ${_t('save')}</button>
     </div>
@@ -446,6 +434,8 @@ window.setEntryType = (type) => {
   document.getElementById('typeExpenseBtn').className = `flex-1 py-2.5 rounded-xl font-bold text-[13px] transition-all ${type==='expense'?'bg-vRose text-white shadow-sm':'text-slate-500'}`;
   const saveBtn = document.getElementById('entrySaveBtn');
   saveBtn.className = `w-full mt-2 py-3.5 rounded-2xl ${type==='income'?'bg-vEmerald text-[#04150c] shadow-vEmerald/30':'bg-vRose text-white shadow-vRose/30'} font-bold shadow-lg active:scale-[0.98] transition-all disp tracking-wide text-[15px] flex items-center justify-center gap-2`;
+  document.documentElement.style.setProperty('--focus-color', type === 'income' ? '#12b76a' : '#f2495c');
+  document.documentElement.style.setProperty('--focus-ring', type === 'income' ? 'rgba(18,183,106,0.4)' : 'rgba(242,73,92,0.4)');
 };
 
 window.submitEntry = async () => {
@@ -462,7 +452,6 @@ window.submitEntry = async () => {
   } catch(e){ window.showToast(e.message, 'error'); btn.innerHTML = og; btn.disabled = false; lucide.createIcons(); }
 };
 
-/* ---------------- history ---------------- */
 window._historyFilter = 'all'; window._historySearch = '';
 function buildHistory(){
   let list = window.txns.filter(t => window._historyFilter==='all' || t.type===window._historyFilter);
@@ -473,7 +462,7 @@ function buildHistory(){
     ${['all','income','expense'].map(f=> `<button type="button" onclick="window._historyFilter='${f}'; window.render();" class="px-4 py-2 rounded-xl text-[11px] font-bold border transition-colors ${window._historyFilter===f?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">${f==='all'?_t('all'):(f==='income'?_t('income'):_t('expense'))}</button>`).join('')}
     <div class="relative flex-1">
       <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
-      <input oninput="window._historySearch=this.value; window.render();" value="${window._historySearch}" placeholder="${_t('search')}" class="w-full pl-9 pr-3 py-2 rounded-xl glass-input text-xs font-medium outline-none focus:border-vEmerald transition-colors shadow-inner">
+      <input oninput="window._historySearch=this.value; window.render();" value="${window._historySearch}" placeholder="${_t('search')}" class="w-full pl-9 pr-3 py-2 rounded-xl glass-input dyn-focus text-xs font-medium outline-none transition-colors shadow-inner">
     </div>
   </div>
   <div class="glass rounded-[24px] overflow-hidden shadow-sm">
@@ -502,7 +491,6 @@ window.deleteTxn = async (id) => {
   } catch(e){}
 };
 
-/* ---------------- profile & settings ---------------- */
 function buildProfile(){
   const p = window.profile;
   return `
@@ -582,7 +570,6 @@ window.reqDeleteAccount = async () => {
   } catch(e){}
 };
 
-/* ---------------- cropper (1:1 with zoom/pan) ---------------- */
 let cropState = { img: null, scale: 1, dx: 0, dy: 0, dragging: false, px: 0, py: 0, file: null };
 window.initCropper = (e) => {
   const file = e.target.files[0]; e.target.value = '';
@@ -646,13 +633,14 @@ window.doCrop = () => {
   }, 'image/jpeg', 0.9);
 };
 
-/* ---------------- admin/manage ---------------- */
 window.openMasterKeyModal = () => {
   window.showModal(`
     <div class="text-center mb-6"><div class="w-14 h-14 bg-vIndigo/10 text-vIndigo rounded-full flex items-center justify-center mx-auto mb-3 border border-vIndigo/20"><i data-lucide="key-round" class="w-7 h-7"></i></div><h3 class="disp text-2xl font-bold tracking-tight">Master Key</h3></div>
-    <input type="password" id="masterKeyInput" class="w-full p-4 rounded-2xl glass-input text-lg text-center tracking-widest font-mono outline-none focus:border-vIndigo shadow-inner" placeholder="••••••••">
+    <input type="password" id="masterKeyInput" class="w-full p-4 rounded-2xl glass-input text-lg text-center tracking-widest font-mono outline-none dyn-focus shadow-inner" placeholder="••••••••">
     <div class="flex gap-3 mt-6"><button type="button" onclick="window.hideModal()" class="flex-1 py-4 text-sm glass-input rounded-xl font-bold">Cancel</button><button type="button" id="mk-ok" class="flex-1 py-4 text-sm bg-vIndigo text-white rounded-xl font-bold shadow-lg shadow-vIndigo/30 active:scale-95 transition-all">Enter</button></div>
   `);
+  document.documentElement.style.setProperty('--focus-color', '#6366f1');
+  document.documentElement.style.setProperty('--focus-ring', 'rgba(99,102,241,0.4)');
   document.getElementById('mk-ok').onclick = async () => {
     try {
       const masterKey = document.getElementById('masterKeyInput').value;
@@ -693,7 +681,6 @@ function buildManage(){
   </div>`;
 }
 
-/* ---------------- boot ---------------- */
 async function boot(){
   try {
     window.CFG = await fetch('/api/config').then(r=>r.json());
@@ -701,27 +688,21 @@ async function boot(){
     const { data: { session } } = await window.supa.auth.getSession(); window.session = session;
     window.supa.auth.onAuthStateChange(async (event, s) => {
       window.session = s;
-      
-      // Handle pending account deletion flow
       const pendingDelId = localStorage.getItem('vault_pending_delete');
       if (s && pendingDelId) {
         if (s.user.id === pendingDelId) {
-          // Erase all data
           await window.supa.from('transactions').delete().eq('user_id', s.user.id);
           await window.supa.from('feedback').delete().eq('user_id', s.user.id);
           await window.supa.from('profiles').update({ pin_set: false, pin_hash: null, avatar_url: null, full_name: 'Deleted User' }).eq('id', s.user.id);
           localStorage.removeItem('vault_pending_delete');
           window.showToast('Account data permanently deleted.');
         } else {
-          // Logged in with different account, cancel deletion
           localStorage.removeItem('vault_pending_delete');
         }
       }
-
       if (s && !pendingDelId) { await window.loadProfile(); await window.loadTxns(); await window.loadFeedback(); }
       window.render();
     });
-    
     if (window.session) { await window.loadProfile(); await window.loadTxns(); await window.loadFeedback(); }
     window.render();
     if (window.activeTab === 'add') setTimeout(()=>window.setEntryType('income'), 60);
