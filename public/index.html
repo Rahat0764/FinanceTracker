@@ -43,7 +43,8 @@ tailwind.config = {
   .toast-in{animation:toastIn .3s ease-out forwards} @keyframes toastIn{from{opacity:0;transform:translateX(110%)}to{opacity:1;transform:translateX(0)}}
   #boot{transition:opacity .4s ease,visibility .4s ease} .boot-hide{opacity:0;visibility:hidden;pointer-events:none}
   ::selection{background:#12b76a;color:#04150c}
-  .ring-track{stroke:rgba(255,255,255,.08)} .dark .ring-track{stroke:rgba(255,255,255,.08)} .ring-prog{stroke:#12b76a;stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.16,1,.3,1)}
+  .ring-track{stroke:rgba(255,255,255,.08)} .dark .ring-track{stroke:rgba(255,255,255,.08)}
+  .ring-prog{stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.16,1,.3,1), stroke 0.4s ease;}
   .key-btn{transition:transform .12s ease,background .12s ease} .key-btn:active{transform:scale(.92)}
   .dot{width:12px;height:12px;border-radius:50%;background:rgba(0,0,0,.1);transition:all .2s ease}
   .dark .dot{background:rgba(255,255,255,.12)}
@@ -110,7 +111,9 @@ const LANG = {
     history_title: "সম্পূর্ণ হিস্ট্রি", search: "খুঁজুন...", all: "সব", del: "মুছুন",
     change_pin: "পিন পরিবর্তন করুন", danger: "বিপদজনক অঞ্চল", reset_all: "সম্পূর্ণ হিস্ট্রি রিসেট করুন",
     delete_account: "অ্যাকাউন্ট ও ডেটা ডিলিট করুন", logout: "লগআউট", lang_switch: "Switch to English", exit_admin: "অ্যাডমিন প্যানেল থেকে প্রস্থান",
-    save_success: "এন্ট্রি সেভ হয়েছে!", req_fields: "পরিমাণ ও উৎস দিন"
+    save_success: "এন্ট্রি সেভ হয়েছে!", req_fields: "পরিমাণ ও উৎস দিন",
+    bulk_del_all: "সম্পূর্ণ হিস্ট্রি ডিলিট করুন", bulk_del_inc: "সকল আয় হিস্ট্রি ডিলিট করুন", bulk_del_exp: "সকল ব্যয় হিস্ট্রি ডিলিট করুন",
+    del_confirm_1: "ডিলিট কনফার্মেশন (১/২)", del_confirm_2: "চূড়ান্ত কনফার্মেশন (২/২)", enter_pin_cont: "চালিয়ে যেতে পিন দিন", enter_pin_perm: "স্থায়ীভাবে ডিলিট করতে আবার পিন দিন"
   },
   en: {
     tagline: "Your completely private income-expense tracker. 100% secure.",
@@ -124,7 +127,9 @@ const LANG = {
     history_title: "Full History", search: "Search...", all: "All", del: "Delete",
     change_pin: "Change PIN", danger: "Danger Zone", reset_all: "Reset Full History",
     delete_account: "Delete Account & Data", logout: "Logout", lang_switch: "Switch to Bengali", exit_admin: "Exit Admin Mode",
-    save_success: "Entry saved!", req_fields: "Amount and Source required"
+    save_success: "Entry saved!", req_fields: "Amount and Source required",
+    bulk_del_all: "Delete All History", bulk_del_inc: "Delete All Income History", bulk_del_exp: "Delete All Expense History",
+    del_confirm_1: "Bulk Delete (1/2)", del_confirm_2: "Final Confirm (2/2)", enter_pin_cont: "Enter PIN to continue", enter_pin_perm: "Enter PIN again to permanently delete"
   }
 };
 window._t = (key) => LANG[window.lang][key] || key;
@@ -207,7 +212,7 @@ window.pinKey = (k) => {
     document.getElementById(`dot-${i}`).classList.toggle('filled', i < pinEntered.length);
   }
   if (pinEntered.length === 6) { 
-    setTimeout(() => { document.getElementById('pinContainer').classList.add('hidden'); pinResolve(pinEntered); }, 150); 
+    setTimeout(() => { document.getElementById('pinContainer').classList.add('hidden'); pinResolve(pinEntered); }, 50); 
   }
 };
 
@@ -354,7 +359,6 @@ window.handleLogoTap = () => {
   const adminEmail = window.CFG?.superAdminEmail?.toLowerCase().trim();
   const userEmail = window.profile?.email?.toLowerCase().trim();
   if (!adminEmail || !userEmail || adminEmail !== userEmail) return;
-  
   window.logoTapCount++; 
   if (window.logoTapCount >= 5) { window.logoTapCount = 0; window.openMasterKeyModal(); }
   setTimeout(()=>{ window.logoTapCount = 0; }, 2500);
@@ -398,7 +402,13 @@ function buildDashboard(){
   const balance = income - expense;
   const now = new Date(); const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
   const day = now.getDate(); const left = daysInMonth - day;
-  const r = 42, circ = 2*Math.PI*r; const offset = circ * (left / daysInMonth);
+  const pct = left / daysInMonth;
+  const r = 42, circ = 2*Math.PI*r; const offset = circ * (1 - pct);
+  
+  let progColor = '#f2495c';
+  if(pct > 0.5) progColor = '#12b76a';
+  else if(pct > 0.25) progColor = '#f2b705';
+  else if(pct > 0.1) progColor = '#f97316';
   
   return `
   <div class="cut glass p-6 md:p-8 relative overflow-hidden mb-6 shadow-sm">
@@ -410,7 +420,7 @@ function buildDashboard(){
       </div>
       <svg width="100" height="100" viewBox="0 0 100 100" class="-rotate-90 shrink-0 drop-shadow-md">
         <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-track"></circle>
-        <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-prog" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"></circle>
+        <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-prog" stroke="${progColor}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"></circle>
         <text x="50" y="46" text-anchor="middle" fill="currentColor" font-size="22" font-weight="800" transform="rotate(90 50 50)" font-family="Sora">${bnNum(left)}</text>
         <text x="50" y="63" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9" transform="rotate(90 50 50)">${_t('days_left')}</text>
       </svg>
@@ -518,8 +528,27 @@ window.submitEntry = async () => {
     const { error } = await window.supa.from('transactions').insert([row]);
     if (error) throw error;
     window.showToast(_t('save_success')); window.notify('transaction_add', row);
-    await window.loadTxns(); window.changeTab('dashboard');
-  } catch(e){ window.showToast(e.message, 'error'); btn.innerHTML = og; btn.disabled = false; lucide.createIcons(); }
+    await window.loadTxns(); 
+    document.getElementById('entryAmount').value = '';
+    document.getElementById('entrySource').value = '';
+    document.getElementById('entryNote').value = '';
+  } catch(e){ window.showToast(e.message, 'error'); } 
+  finally { btn.innerHTML = og; btn.disabled = false; lucide.createIcons(); }
+};
+
+window.bulkDeleteTxn = async (type) => {
+  try {
+    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont'));
+    const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
+    if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
+    await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
+    
+    let query = window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
+    if (type !== 'all') query = query.eq('type', type);
+    const { error } = await query;
+    if (error) throw error;
+    window.showToast('Deleted'); await window.loadTxns(); window.render();
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
 };
 
 window._historyFilter = 'all'; window._historySearch = '';
@@ -550,6 +579,12 @@ function buildHistory(){
         </div>
       </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`}
     </div>
+    ${list.length > 0 ? `
+    <div class="p-4 border-t border-slate-100/50 dark:border-white/5 flex justify-center bg-white/10 dark:bg-black/10">
+      <button type="button" onclick="window.bulkDeleteTxn('${window._historyFilter}')" class="py-3 px-6 bg-vRose/10 text-vRose rounded-2xl font-bold text-[13px] hover:bg-vRose/20 transition-colors shadow-sm w-full md:w-auto">
+        ${window._historyFilter === 'all' ? _t('bulk_del_all') : (window._historyFilter === 'income' ? _t('bulk_del_inc') : _t('bulk_del_exp'))}
+      </button>
+    </div>` : ''}
   </div>`;
 }
 
@@ -614,17 +649,23 @@ window.changePin = async () => {
 
 window.fullReset = async () => {
   try {
-    const pin1 = await window.askPin('Reset History (1/2)', 'Require PIN'); await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
-    const pin2 = await window.askPin('Are you sure? (2/2)', 'Require PIN again'); await window.callApi('/api/pin', { action:'verify', pin: pin2, accessToken: window.session.access_token });
+    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); 
+    const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
+    if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
+    await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
+    
     await window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
     window.showToast('History Wiped'); await window.loadTxns(); window.changeTab('dashboard');
-  } catch(e){}
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
 };
 
 window.reqDeleteAccount = async () => {
   try {
-    const pin = await window.askPin('Delete Account & Data', 'Enter PIN to confirm');
-    await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
+    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont'));
+    const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
+    if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
+    await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
+    
     localStorage.setItem('vault_pending_delete', window.session.user.id);
     await window.supa.auth.signOut();
     window.session = null; window.profile = null;
@@ -637,7 +678,7 @@ window.reqDeleteAccount = async () => {
         <button onclick="window.hideModal(); window.loginGoogle();" class="w-full py-3.5 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-600/30 active:scale-95 transition-all">Login to Delete Data</button>
       </div>
     `);
-  } catch(e){}
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
 };
 
 let cropState = { img: null, scale: 1, dx: 0, dy: 0, dragging: false, px: 0, py: 0, file: null, pointers: [], initDist: 0, initScale: 1 };
