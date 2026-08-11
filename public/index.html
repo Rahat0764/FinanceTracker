@@ -43,7 +43,7 @@ tailwind.config = {
   .toast-in{animation:toastIn .3s ease-out forwards} @keyframes toastIn{from{opacity:0;transform:translateX(110%)}to{opacity:1;transform:translateX(0)}}
   #boot{transition:opacity .4s ease,visibility .4s ease} .boot-hide{opacity:0;visibility:hidden;pointer-events:none}
   ::selection{background:#12b76a;color:#04150c}
-  .ring-track{stroke:rgba(255,255,255,.08)} .dark .ring-track{stroke:rgba(255,255,255,.08)} .ring-prog{stroke:#f2b705;stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.16,1,.3,1)}
+  .ring-track{stroke:rgba(255,255,255,.08)} .dark .ring-track{stroke:rgba(255,255,255,.08)} .ring-prog{stroke:#12b76a;stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.16,1,.3,1)}
   .key-btn{transition:transform .12s ease,background .12s ease} .key-btn:active{transform:scale(.92)}
   .dot{width:12px;height:12px;border-radius:50%;background:rgba(0,0,0,.1);transition:all .2s ease}
   .dark .dot{background:rgba(255,255,255,.12)}
@@ -52,14 +52,17 @@ tailwind.config = {
 </head>
 <body class="text-slate-900 dark:text-slate-100 flex flex-col h-full w-full">
 
-<div id="boot" class="fixed inset-0 bg-[#060b09] z-[999] flex flex-col items-center justify-center gap-6">
-  <div class="w-20 h-20 rounded-[28px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-[0_0_40px_rgba(18,183,106,0.2)] animate-pulse border-4 border-[#0a110d]">
-    <i data-lucide="vault" class="w-10 h-10 text-[#04150c]"></i>
+<div id="boot" class="fixed inset-0 bg-[#f1f5f9] dark:bg-[#0a0a0a] z-[999] flex flex-col items-center justify-center gap-6">
+  <div class="w-24 h-24 rounded-[32px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-[0_0_40px_rgba(18,183,106,0.3)] animate-pulse border-4 border-white dark:border-[#141414]">
+    <i data-lucide="vault" class="w-12 h-12 text-[#04150c]"></i>
   </div>
   <div class="flex flex-col items-center gap-2">
-    <i data-lucide="loader-2" class="w-5 h-5 text-vEmerald animate-spin"></i>
-    <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-300 mt-2">Database Loading</p>
-    <p class="text-[10px] text-slate-500 font-medium tracking-wide">Please wait...</p>
+    <h2 class="disp font-extrabold text-2xl tracking-tight text-slate-800 dark:text-white">Vault</h2>
+    <div class="flex items-center gap-2 mt-2">
+      <i data-lucide="loader-2" class="w-4 h-4 text-vEmerald animate-spin"></i>
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Database Loading</p>
+    </div>
+    <p class="text-[11px] text-slate-400 dark:text-slate-500 font-medium tracking-wide">Please wait...</p>
   </div>
 </div>
 
@@ -141,6 +144,14 @@ const bnNum = (n) => window.lang === 'bn' ? String(n).replace(/\d/g, d => 'à§¦à§
 const formatDate = (dateObj) => {
   if (window.lang === 'en') return `${EN_MONTHS[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
   return `${BN_MONTHS[dateObj.getMonth()]} ${bnNum(dateObj.getDate())}, ${bnNum(dateObj.getFullYear())}`;
+};
+
+const getLocalDateString = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 };
 
 window.showToast = (msg, type='success') => {
@@ -247,7 +258,7 @@ function buildLanding(){
       <p class="text-[10px] text-slate-400 mt-5 font-medium">${_t('auto_save')}</p>
     </div>
     <div class="mt-8 text-[11px] text-slate-500 font-semibold flex items-center justify-center gap-1.5">
-      Developed by <span class="text-vEmerald font-bold">Rahat</span> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a>
+      Developed by <a href="https://linkedin.com/in/RahatAhmedX" target="_blank" class="text-vEmerald font-bold hover:underline">Rahat</a> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a>
     </div>
   </div>`;
 }
@@ -316,7 +327,7 @@ function buildShell(innerHtml){
       
       <div class="w-full flex justify-center md:justify-end items-center py-2 px-4 text-[10px] text-slate-500 font-semibold border-b border-white/10 dark:border-white/5 bg-white/20 dark:bg-black/20 backdrop-blur-md z-30 shrink-0">
         <div class="flex items-center gap-4">
-          <span class="flex items-center gap-1.5">Developed by <span class="text-vEmerald font-bold">Rahat</span> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a></span>
+          <span class="flex items-center gap-1.5">Developed by <a href="https://linkedin.com/in/RahatAhmedX" target="_blank" class="text-vEmerald font-bold hover:underline">Rahat</a> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a></span>
           <button type="button" onclick="window.toggleTheme()" class="themeBtn hidden md:flex relative w-12 h-6 bg-slate-200 dark:bg-slate-700 rounded-full items-center px-1 cursor-pointer transition-colors border border-slate-300 dark:border-slate-600 shadow-inner">
             <i data-lucide="moon" class="absolute right-1 w-3 h-3 text-slate-400"></i>
             <i data-lucide="sun" class="absolute left-1 w-3 h-3 text-amber-500"></i>
@@ -340,8 +351,10 @@ function buildShell(innerHtml){
 }
 
 window.handleLogoTap = () => {
-  if (!window.CFG || !window.CFG.superAdminEmail) return;
-  if (window.profile && window.profile.email !== window.CFG.superAdminEmail) return;
+  const adminEmail = window.CFG?.superAdminEmail?.toLowerCase().trim();
+  const userEmail = window.profile?.email?.toLowerCase().trim();
+  if (!adminEmail || !userEmail || adminEmail !== userEmail) return;
+  
   window.logoTapCount++; 
   if (window.logoTapCount >= 5) { window.logoTapCount = 0; window.openMasterKeyModal(); }
   setTimeout(()=>{ window.logoTapCount = 0; }, 2500);
@@ -360,7 +373,7 @@ function updateNav(){
   });
   const htmlDark = document.documentElement.classList.contains('dark');
   document.querySelectorAll('.themeSlider').forEach(el => {
-    if(el.parentElement.id === 'themeBtnDesktop' || el.parentElement.classList.contains('hidden')){
+    if(el.parentElement.classList.contains('hidden')){
       el.classList.toggle('translate-x-[24px]', htmlDark);
     } else {
       el.classList.toggle('translate-x-[26px]', htmlDark);
@@ -384,8 +397,8 @@ function buildDashboard(){
   const expense = window.txns.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
   const balance = income - expense;
   const now = new Date(); const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-  const day = now.getDate(); const left = daysInMonth - day; const pct = day / daysInMonth;
-  const r = 42, circ = 2*Math.PI*r; const offset = circ * (1 - pct);
+  const day = now.getDate(); const left = daysInMonth - day;
+  const r = 42, circ = 2*Math.PI*r; const offset = circ * (left / daysInMonth);
   
   return `
   <div class="cut glass p-6 md:p-8 relative overflow-hidden mb-6 shadow-sm">
@@ -446,6 +459,7 @@ function txnRow(t){
 
 window._entryType = 'income';
 function buildAdd(){
+  const todayStr = getLocalDateString();
   return `
   <h2 class="disp text-2xl font-extrabold mb-5 flex items-center gap-2 tracking-tight"><i data-lucide="plus-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('new_entry')}</h2>
   <div class="glass rounded-[28px] p-5 md:p-7 shadow-sm">
@@ -458,12 +472,12 @@ function buildAdd(){
             <input id="entryAmount" type="number" placeholder="0.00" class="w-full pl-10 pr-4 py-3 rounded-2xl glass-input dyn-focus text-base font-bold outline-none transition-all shadow-inner">
           </div>
         </div>
-        <div class="w-[72px] shrink-0 flex flex-col items-center">
-          <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block text-center w-full">${_t('date_label')}</label>
-          <div class="relative w-full h-[48px] flex items-center justify-center rounded-2xl glass-input dyn-focus shadow-inner cursor-pointer hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors group">
-            <input id="entryDate" type="date" value="${new Date().toISOString().split('T')[0]}" class="absolute inset-0 opacity-0 cursor-pointer z-20 w-full h-full" onchange="document.getElementById('dateIconText').innerText = this.value.split('-')[2]">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 group-hover:text-vEmerald transition-colors absolute z-0"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            <span id="dateIconText" class="text-[11px] font-extrabold mt-[8px] z-10 text-slate-700 dark:text-slate-300 pointer-events-none">${new Date().getDate().toString().padStart(2, '0')}</span>
+        <div class="w-[60px] shrink-0 flex flex-col items-center">
+          <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block text-center w-full">DATE</label>
+          <div class="relative w-12 h-12 flex items-center justify-center cursor-pointer group">
+            <input id="entryDate" type="date" value="${todayStr}" class="absolute inset-0 opacity-0 cursor-pointer z-20 w-full h-full" onchange="document.getElementById('dateIconText').innerText = this.value.split('-')[2]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 transition-colors absolute z-0 group-focus-within:!stroke-[var(--focus-color)] group-hover:!stroke-[var(--focus-color)]"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span id="dateIconText" class="text-[12px] font-extrabold mt-[8px] z-10 text-slate-600 dark:text-slate-300 pointer-events-none transition-colors group-focus-within:!text-[var(--focus-color)] group-hover:!text-[var(--focus-color)]">${todayStr.split('-')[2]}</span>
           </div>
         </div>
       </div>
@@ -626,7 +640,7 @@ window.reqDeleteAccount = async () => {
   } catch(e){}
 };
 
-let cropState = { img: null, scale: 1, dx: 0, dy: 0, dragging: false, px: 0, py: 0, file: null };
+let cropState = { img: null, scale: 1, dx: 0, dy: 0, dragging: false, px: 0, py: 0, file: null, pointers: [], initDist: 0, initScale: 1 };
 window.initCropper = (e) => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
@@ -654,6 +668,9 @@ window.initCropper = (e) => {
 function updateCropView(){ cropState.img.style.transform = `translate(${cropState.dx}px, ${cropState.dy}px) scale(${cropState.scale})`; }
 
 function applyBounds() {
+  const minScale = Math.max(280 / cropState.img.naturalWidth, 280 / cropState.img.naturalHeight);
+  if (cropState.scale < minScale) cropState.scale = minScale;
+
   const area = document.getElementById('cropperArea');
   const cx = area.clientWidth / 2; const cy = area.clientHeight / 2;
   const maxDx = cx - 140;
@@ -676,16 +693,62 @@ document.getElementById('cropZoom').addEventListener('input', e => {
   applyBounds();
   updateCropView();
 });
+
 const cArea = document.getElementById('cropperArea');
-cArea.addEventListener('pointerdown', e => { cropState.dragging = true; cropState.px = e.clientX; cropState.py = e.clientY; cArea.setPointerCapture(e.pointerId); });
-cArea.addEventListener('pointermove', e => {
-  if(!cropState.dragging) return;
-  cropState.dx += (e.clientX - cropState.px); cropState.dy += (e.clientY - cropState.py);
-  cropState.px = e.clientX; cropState.py = e.clientY; 
-  applyBounds();
-  updateCropView();
+cArea.addEventListener('pointerdown', e => { 
+  cropState.pointers.push(e);
+  if (cropState.pointers.length === 2) {
+    cropState.initDist = Math.hypot(cropState.pointers[0].clientX - cropState.pointers[1].clientX, cropState.pointers[0].clientY - cropState.pointers[1].clientY);
+    cropState.initScale = cropState.scale;
+  } else if (cropState.pointers.length === 1) {
+    cropState.dragging = true; 
+    cropState.px = e.clientX; 
+    cropState.py = e.clientY; 
+    cArea.setPointerCapture(e.pointerId); 
+  }
 });
-cArea.addEventListener('pointerup', e => { cropState.dragging = false; cArea.releasePointerCapture(e.pointerId); });
+cArea.addEventListener('pointermove', e => {
+  const index = cropState.pointers.findIndex(p => p.pointerId === e.pointerId);
+  if (index !== -1) cropState.pointers[index] = e;
+
+  if (cropState.pointers.length === 2) {
+    const dist = Math.hypot(cropState.pointers[0].clientX - cropState.pointers[1].clientX, cropState.pointers[0].clientY - cropState.pointers[1].clientY);
+    const zoomFactor = dist / cropState.initDist;
+    const oldScale = cropState.scale;
+    let newScale = cropState.initScale * zoomFactor;
+    const minScale = Math.max(280 / cropState.img.naturalWidth, 280 / cropState.img.naturalHeight);
+    if(newScale < minScale) newScale = minScale;
+    
+    cropState.scale = newScale;
+    const cx = cArea.clientWidth / 2; const cy = cArea.clientHeight / 2;
+    cropState.dx = cx - (cx - cropState.dx) * (cropState.scale / oldScale);
+    cropState.dy = cy - (cy - cropState.dy) * (cropState.scale / oldScale);
+    
+    applyBounds();
+    updateCropView();
+    document.getElementById('cropZoom').value = cropState.scale;
+  } else if (cropState.dragging && cropState.pointers.length === 1) {
+    cropState.dx += (e.clientX - cropState.px); 
+    cropState.dy += (e.clientY - cropState.py);
+    cropState.px = e.clientX; 
+    cropState.py = e.clientY; 
+    applyBounds();
+    updateCropView();
+  }
+});
+const handlePointerUp = e => {
+  cropState.pointers = cropState.pointers.filter(p => p.pointerId !== e.pointerId);
+  if (cropState.pointers.length < 2 && cropState.pointers.length === 1) {
+    cropState.px = cropState.pointers[0].clientX;
+    cropState.py = cropState.pointers[0].clientY;
+  }
+  if(cropState.pointers.length === 0) {
+    cropState.dragging = false; 
+    cArea.releasePointerCapture(e.pointerId);
+  }
+};
+cArea.addEventListener('pointerup', handlePointerUp);
+cArea.addEventListener('pointercancel', handlePointerUp);
 
 window.closeCropper = () => { document.getElementById('cropperModal').classList.add('hidden'); document.getElementById('cropperModal').classList.remove('flex'); };
 window.doCrop = () => {
