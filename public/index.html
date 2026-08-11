@@ -425,10 +425,10 @@ function buildDashboard(){
   const pct = left / daysInMonth;
   const r = 42, circ = 2*Math.PI*r; const offset = circ * (1 - pct);
   
-  let progColor = '#f2495c';
-  if(pct > 0.5) progColor = '#12b76a';
-  else if(pct > 0.25) progColor = '#f2b705';
-  else if(pct > 0.1) progColor = '#f97316';
+  let progColor = '#12b76a';
+  if(pct < 0.25) progColor = '#f2495c';
+  else if(pct < 0.5) progColor = '#f97316';
+  else if(pct < 0.75) progColor = '#f2b705';
   
   return `
   <div class="cut glass p-6 md:p-8 relative overflow-hidden mb-6 shadow-sm">
