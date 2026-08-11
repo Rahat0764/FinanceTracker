@@ -18,20 +18,23 @@ tailwind.config = {
   darkMode: 'class',
   theme: { extend: {
     fontFamily: { display: ['"Sora"','sans-serif'], body: ['"Hind Siliguri"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] },
-    colors: { vBg:'#060b09', vCard:'#0e1712', vBorder:'#1b2620', vEmerald:'#12b76a', vEmeraldDim:'#0a7a45', vRose:'#f2495c', vGold:'#f2b705', vIndigo:'#6366f1' }
+    colors: { vBg:'#060b09', vCard:'#0e1712', vEmerald:'#12b76a', vRose:'#f2495c', vGold:'#f2b705', vIndigo:'#6366f1' }
   }}
 }
 </script>
 <style>
   * { -webkit-tap-highlight-color: transparent; }
-  html,body { background:#f6f9f7; height:100dvh; display:flex; flex-direction:column; overflow:hidden; transition: background .4s ease; }
+  html,body { background:#f6f9f7; min-height:100dvh; display:flex; flex-direction:column; transition: background .4s ease; }
   html.dark, html.dark body { background:#060b09; }
   body { font-family:'Hind Siliguri','Sora',sans-serif; }
   .disp { font-family:'Sora',sans-serif; letter-spacing:-0.01em; }
   .mono { font-family:'JetBrains Mono',monospace; }
   .hide-scrollbar::-webkit-scrollbar{display:none} .hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-  .glass{ background:rgba(255,255,255,.92); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border-color:rgba(15,23,20,.08) }
-  .dark .glass{ background:rgba(14,23,18,.82); border-color:rgba(255,255,255,.06) }
+  
+  /* Glassmorphism Styles */
+  .glass { background:rgba(255,255,255,0.7); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.6); box-shadow: 0 4px 30px rgba(0,0,0,0.05); }
+  .dark .glass { background:rgba(15,23,20,0.5); border:1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
+  
   .cut{ clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) }
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   .fade-in{animation:fadeIn .4s cubic-bezier(.16,1,.3,1) forwards} @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -41,7 +44,8 @@ tailwind.config = {
   ::selection{background:#12b76a;color:#04150c}
   .ring-track{stroke:rgba(255,255,255,.08)} .dark .ring-track{stroke:rgba(255,255,255,.08)} .ring-prog{stroke:#f2b705;stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.16,1,.3,1)}
   .key-btn{transition:transform .12s ease,background .12s ease} .key-btn:active{transform:scale(.92)}
-  .dot{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.12);transition:all .2s ease}
+  .dot{width:12px;height:12px;border-radius:50%;background:rgba(100,100,100,.2);transition:all .2s ease}
+  .dark .dot{background:rgba(255,255,255,.12)}
   .dot.filled{background:#12b76a;box-shadow:0 0 12px rgba(18,183,106,.6)}
 </style>
 </head>
@@ -53,37 +57,95 @@ tailwind.config = {
   </div>
   <div class="flex items-center gap-2 text-vGold mt-1">
     <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
-    <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-300">সংযুক্ত হচ্ছে...</p>
   </div>
 </div>
 
-<div id="root"></div>
+<div id="root" class="flex-1 flex flex-col w-full h-full relative"></div>
+
 <div id="modalContainer" class="fixed inset-0 bg-slate-900/60 dark:bg-black/80 z-[100] hidden flex justify-center items-center px-4 backdrop-blur-md overflow-y-auto py-8"></div>
 <div id="pinContainer" class="fixed inset-0 bg-slate-900/70 dark:bg-black/85 z-[150] hidden flex justify-center items-end backdrop-blur-md"></div>
 <div id="toast-container" class="fixed top-6 right-4 z-[300] flex flex-col gap-2 pointer-events-none"></div>
 
+<!-- Cropper Modal -->
+<div id="cropperModal" class="fixed inset-0 bg-black/95 z-[999] hidden flex-col touch-none">
+  <div class="flex-1 relative overflow-hidden" id="cropperArea">
+    <img id="cropperImg" class="absolute pointer-events-none origin-top-left">
+    <div class="absolute inset-0 pointer-events-none" style="box-shadow: 0 0 0 9999px rgba(0,0,0,0.8); border: 2px solid white; border-radius: 50%; width: 280px; height: 280px; left: 50%; top: 45%; margin-left: -140px; margin-top: -140px;">
+      <div class="absolute w-full h-1/3 top-1/3 border-y border-white/30"></div>
+      <div class="absolute w-1/3 h-full left-1/3 border-x border-white/30"></div>
+    </div>
+  </div>
+  <div class="p-6 pb-10 bg-slate-900">
+    <div class="flex items-center gap-4 mb-6">
+      <i data-lucide="zoom-out" class="w-5 h-5 text-slate-400"></i>
+      <input type="range" id="cropZoom" class="flex-1 accent-vEmerald">
+      <i data-lucide="zoom-in" class="w-5 h-5 text-slate-400"></i>
+    </div>
+    <div class="flex gap-4">
+      <button onclick="window.closeCropper()" class="px-5 py-3.5 bg-slate-800 rounded-xl font-bold flex-1">Cancel</button>
+      <button onclick="window.doCrop()" class="px-5 py-3.5 bg-vEmerald text-[#04150c] rounded-xl font-bold flex-1 shadow-lg">Save Profile</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/+esm';
 
+/* ---------------- i18n Dictionary ---------------- */
+window.lang = localStorage.getItem('vault_lang') || 'bn';
+const LANG = {
+  bn: {
+    tagline: "আপনার ব্যক্তিগত আয়-ব্যয়ের সম্পূর্ণ গোপনীয় হিসাব। একদম নিরাপদ।",
+    login_btn: "গুগল দিয়ে লগইন করুন", auto_save: "লগইন করলেই আপনার নাম, ইমেইল ও ছবি সেভ হবে।",
+    dashboard: "হোম", add: "এন্ট্রি", history: "হিস্ট্রি", manage: "ম্যানেজ", profile: "প্রোফাইল",
+    welcome: "স্বাগতম", days_left: "দিন বাকি",
+    total_in: "মোট আয়", total_out: "মোট ব্যয়", balance: "ফান্ডে আছে",
+    recent: "সাম্প্রতিক লেনদেন", see_all: "সব দেখুন", no_txns: "এখনো কোনো এন্ট্রি নেই।",
+    new_entry: "নতুন এন্ট্রি", income: "আয়", expense: "ব্যয়",
+    amount_label: "পরিমাণ (৳)", where_label: "কোথায় আয়/ব্যয় হয়েছে?", note_label: "নোট (ঐচ্ছিক)", date_label: "তারিখ", save: "সেভ করুন",
+    history_title: "সম্পূর্ণ হিস্ট্রি", search: "খুঁজুন...", all: "সব", del: "মুছুন",
+    sec_pin: "নিরাপত্তা পিন", change_pin: "পিন পরিবর্তন করুন",
+    feedback: "ডেভেলপার ফিডব্যাক", dev_contact: "যোগাযোগ করুন",
+    danger: "বিপদজনক অঞ্চল", reset_all: "সম্পূর্ণ হিস্ট্রি রিসেট করুন",
+    logout: "লগআউট", lang_switch: "Switch to English", exit_admin: "অ্যাডমিন প্যানেল থেকে প্রস্থান",
+    save_success: "এন্ট্রি সেভ হয়েছে!", req_fields: "পরিমাণ ও উৎস দিন"
+  },
+  en: {
+    tagline: "Your completely private income-expense tracker. 100% secure.",
+    login_btn: "Login with Google", auto_save: "Your info and avatar will be saved securely.",
+    dashboard: "Home", add: "Entry", history: "History", manage: "Manage", profile: "Profile",
+    welcome: "Welcome", days_left: "Days Left",
+    total_in: "Total Income", total_out: "Total Expense", balance: "Balance",
+    recent: "Recent Transactions", see_all: "See All", no_txns: "No entries yet.",
+    new_entry: "New Entry", income: "Income", expense: "Expense",
+    amount_label: "Amount (৳)", where_label: "Source / Destination?", note_label: "Note (Optional)", date_label: "Date", save: "Save Entry",
+    history_title: "Full History", search: "Search...", all: "All", del: "Delete",
+    sec_pin: "Security PIN", change_pin: "Change PIN",
+    feedback: "Developer Feedback", dev_contact: "Contact Developer",
+    danger: "Danger Zone", reset_all: "Reset Full History",
+    logout: "Logout", lang_switch: "বাংলায় পরিবর্তন করুন", exit_admin: "Exit Admin Mode",
+    save_success: "Entry saved!", req_fields: "Amount and Source required"
+  }
+};
+window._t = (key) => LANG[window.lang][key] || key;
+
 /* ---------------- state ---------------- */
-window.supa = null;
-window.session = null;
-window.profile = null;
+window.supa = null; window.session = null; window.profile = null;
 window.adminToken = localStorage.getItem('vault_admin_token') || null;
 window.activeTab = localStorage.getItem('vault_tab') || 'dashboard';
-window.txns = [];
-window.feedbackList = [];
-window.CFG = {};
-window.logoTapCount = 0;
-window.pendingAvatarBlob = null;
+window.txns = []; window.feedbackList = []; window.CFG = {}; window.logoTapCount = 0;
 
-const INCOME_CATS = ['বাসা থেকে','টিউশনি','ফ্রিল্যান্স','বেতন/জব','বোনাস','ধার পেয়েছি','অন্যান্য আয়'];
-const EXPENSE_CATS = ['খাবার','যাতায়াত','বাসা ভাড়া','কেনাকাটা','পড়াশোনা','বিল (কারেন্ট/ওয়াইফাই)','চিকিৎসা','বিনোদন','ধার দিয়েছি','অন্যান্য খরচ'];
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
-const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
+const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
+const EN_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const EN_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const refId = () => Math.random().toString(36).substr(2,6).toUpperCase();
-const bnNum = (n) => String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]);
+const bnNum = (n) => window.lang === 'bn' ? String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]) : Number(n).toLocaleString('en-US');
+const formatDate = (dateObj) => {
+  if (window.lang === 'en') return `${EN_MONTHS[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
+  return `${BN_MONTHS[dateObj.getMonth()]} ${bnNum(dateObj.getDate())}, ${bnNum(dateObj.getFullYear())}`;
+};
 
 /* ---------------- toast / modal ---------------- */
 window.showToast = (msg, type='success') => {
@@ -98,88 +160,72 @@ window.showToast = (msg, type='success') => {
 
 window.showModal = (html) => {
   const mc = document.getElementById('modalContainer');
-  mc.innerHTML = `<div class="glass w-full max-w-lg rounded-3xl p-6 border pop-in shadow-2xl relative my-auto max-h-[85vh] overflow-y-auto hide-scrollbar">${html}</div>`;
+  mc.innerHTML = `<div class="glass w-full max-w-md rounded-3xl p-6 border pop-in shadow-2xl relative my-auto max-h-[85vh] overflow-y-auto hide-scrollbar">${html}</div>`;
   mc.classList.remove('hidden'); lucide.createIcons();
   mc.onclick = (e)=>{ if(e.target===mc) window.hideModal(); };
 };
 window.hideModal = () => document.getElementById('modalContainer').classList.add('hidden');
 
-/* ---------------- floating PIN keypad ---------------- */
+/* ---------------- floating PIN keypad (Blink Fixed) ---------------- */
+let pinResolve, pinReject, pinEntered = '';
 window.askPin = (title, subtitle='') => {
   return new Promise((resolve, reject) => {
+    pinResolve = resolve; pinReject = reject; pinEntered = '';
     const pc = document.getElementById('pinContainer');
-    let entered = '';
-    const render = () => {
-      pc.innerHTML = `
-      <div class="w-full max-w-md glass rounded-t-[36px] border-t border-x p-6 pb-8 pop-in">
-        <div class="w-10 h-1.5 bg-slate-400/30 rounded-full mx-auto mb-5"></div>
-        <div class="text-center mb-6">
-          <div class="w-12 h-12 bg-vGold/10 text-vGold rounded-2xl flex items-center justify-center mx-auto mb-3 border border-vGold/20"><i data-lucide="lock-keyhole" class="w-6 h-6"></i></div>
-          <h3 class="disp font-bold text-xl">${title}</h3>
-          ${subtitle ? `<p class="text-xs text-slate-500 mt-1">${subtitle}</p>` : ''}
-        </div>
-        <div class="flex justify-center gap-3 mb-7" id="pinDots">
-          ${[0,1,2,3,4,5].map(i=>`<div class="dot ${i<entered.length?'filled':''}"></div>`).join('')}
-        </div>
-        <div class="grid grid-cols-3 gap-3 max-w-xs mx-auto">
-          ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" class="key-btn py-4 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 disp text-xl font-bold" data-k="${n}">${bnNum(n)}</button>`).join('')}
-          <button type="button" class="key-btn py-4 rounded-2xl text-slate-400 font-bold text-xs" data-k="cancel">বাতিল</button>
-          <button type="button" class="key-btn py-4 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 disp text-xl font-bold" data-k="0">০</button>
-          <button type="button" class="key-btn py-4 rounded-2xl text-vRose flex items-center justify-center" data-k="back"><i data-lucide="delete" class="w-5 h-5"></i></button>
-        </div>
-      </div>`;
-      lucide.createIcons();
-      pc.querySelectorAll('[data-k]').forEach(btn => btn.onclick = () => {
-        const k = btn.dataset.k;
-        if (k === 'cancel') { pc.classList.add('hidden'); reject(new Error('cancelled')); return; }
-        if (k === 'back') { entered = entered.slice(0,-1); render(); return; }
-        if (entered.length < 6) entered += k;
-        if (entered.length === 6) { pc.classList.add('hidden'); resolve(entered); return; }
-        render();
-      });
-    };
-    pc.classList.remove('hidden');
-    render();
+    pc.innerHTML = `
+    <div class="w-full max-w-md glass rounded-t-[36px] border-t border-x p-6 pb-8 pop-in">
+      <div class="w-10 h-1.5 bg-slate-400/30 rounded-full mx-auto mb-5"></div>
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 bg-vGold/10 text-vGold rounded-2xl flex items-center justify-center mx-auto mb-3 border border-vGold/20"><i data-lucide="lock-keyhole" class="w-6 h-6"></i></div>
+        <h3 class="disp font-bold text-xl">${title}</h3>
+        ${subtitle ? `<p class="text-xs text-slate-500 mt-1">${subtitle}</p>` : ''}
+      </div>
+      <div class="flex justify-center gap-3 mb-7" id="pinDots">
+        ${[0,1,2,3,4,5].map(i=>`<div class="dot" id="dot-${i}"></div>`).join('')}
+      </div>
+      <div class="grid grid-cols-3 gap-3 max-w-xs mx-auto">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" class="key-btn py-4 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 disp text-xl font-bold" onclick="window.pinKey('${n}')">${bnNum(n)}</button>`).join('')}
+        <button type="button" class="key-btn py-4 rounded-2xl text-slate-400 font-bold text-xs" onclick="window.pinKey('cancel')">Cancel</button>
+        <button type="button" class="key-btn py-4 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 disp text-xl font-bold" onclick="window.pinKey('0')">${bnNum(0)}</button>
+        <button type="button" class="key-btn py-4 rounded-2xl text-vRose flex items-center justify-center" onclick="window.pinKey('back')"><i data-lucide="delete" class="w-5 h-5"></i></button>
+      </div>
+    </div>`;
+    pc.classList.remove('hidden'); lucide.createIcons();
   });
+};
+
+window.pinKey = (k) => {
+  if (k === 'cancel') { document.getElementById('pinContainer').classList.add('hidden'); pinReject(new Error('cancelled')); return; }
+  if (k === 'back') { pinEntered = pinEntered.slice(0,-1); }
+  else if (pinEntered.length < 6) { pinEntered += k; }
+  
+  for(let i=0; i<6; i++){
+    document.getElementById(`dot-${i}`).classList.toggle('filled', i < pinEntered.length);
+  }
+  
+  if (pinEntered.length === 6) { 
+    setTimeout(() => { document.getElementById('pinContainer').classList.add('hidden'); pinResolve(pinEntered); }, 150); 
+  }
 };
 
 /* ---------------- API helper ---------------- */
 window.callApi = async (path, body) => {
   const res = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'সার্ভার এরর');
+  if (!res.ok) throw new Error(json.error || 'Server Error');
   return json;
 };
-
-window.notify = (event, details) => {
-  if (!window.session) return;
-  window.callApi('/api/notify', { event, accessToken: window.session.access_token, details }).catch(()=>{});
-};
+window.notify = (event, details) => { if (window.session) window.callApi('/api/notify', { event, accessToken: window.session.access_token, details }).catch(()=>{}); };
 
 /* ---------------- auth ---------------- */
-window.loginGoogle = async () => {
-  await window.supa.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin + window.location.pathname } });
-};
-window.logout = async () => {
-  await window.supa.auth.signOut();
-  window.adminToken = null; localStorage.removeItem('vault_admin_token');
-  window.profile = null; window.session = null;
-  window.render();
-};
+window.loginGoogle = async () => { await window.supa.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin + window.location.pathname } }); };
+window.logout = async () => { await window.supa.auth.signOut(); window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.profile = null; window.session = null; window.render(); };
+window.exitAdmin = () => { window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.changeTab('dashboard'); };
 
 /* ---------------- data loading ---------------- */
-window.loadProfile = async () => {
-  const { data } = await window.supa.from('profiles').select('id, full_name, email, avatar_url, pin_set, is_suspended, suspend_reason').eq('id', window.session.user.id).single();
-  window.profile = data;
-};
-window.loadTxns = async () => {
-  const { data } = await window.supa.from('transactions').select('*').eq('user_id', window.session.user.id).order('txn_date', { ascending:false }).order('created_at', { ascending:false });
-  window.txns = data || [];
-};
-window.loadFeedback = async () => {
-  const { data } = await window.supa.from('feedback').select('*').eq('user_id', window.session.user.id).order('created_at', { ascending:false });
-  window.feedbackList = data || [];
-};
+window.loadProfile = async () => { const { data } = await window.supa.from('profiles').select('*').eq('id', window.session.user.id).single(); window.profile = data; };
+window.loadTxns = async () => { const { data } = await window.supa.from('transactions').select('*').eq('user_id', window.session.user.id).order('txn_date', { ascending:false }).order('created_at', { ascending:false }); window.txns = data || []; };
+window.loadFeedback = async () => { const { data } = await window.supa.from('feedback').select('*').eq('user_id', window.session.user.id).order('created_at', { ascending:false }); window.feedbackList = data || []; };
 
 /* ---------------- render root ---------------- */
 window.render = () => {
@@ -188,119 +234,88 @@ window.render = () => {
   if (window.profile && window.profile.is_suspended) { root.innerHTML = buildSuspended(); lucide.createIcons(); return; }
   if (window.profile && !window.profile.pin_set) { root.innerHTML = buildShell(''); lucide.createIcons(); setTimeout(forceSetPin, 300); return; }
   root.innerHTML = buildShell(buildTabContent());
-  lucide.createIcons();
-  updateNav();
-  document.getElementById('main-scroll')?.scrollTo(0,0);
+  lucide.createIcons(); updateNav(); window.scrollTo(0,0);
 };
 
 /* ---------------- landing (logged out) ---------------- */
 function buildLanding(){
   return `
-  <div class="flex-1 flex flex-col items-center justify-center px-6 text-center overflow-y-auto hide-scrollbar py-10">
-    <div class="w-20 h-20 rounded-3xl bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-6"><i data-lucide="vault" class="w-10 h-10 text-[#04150c]"></i></div>
-    <h1 class="disp text-4xl font-extrabold mb-2">Vault</h1>
-    <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs mb-8 leading-relaxed">আপনার ব্যক্তিগত আয়-ব্যয়ের সম্পূর্ণ গোপনীয় হিসাব। শুধু আপনি দেখতে পারবেন — একদম নিরাপদ, একদম ব্যক্তিগত।</p>
-    <button type="button" onclick="window.loginGoogle()" class="flex items-center gap-3 bg-white dark:bg-white text-slate-800 px-6 py-4 rounded-2xl font-bold shadow-xl active:scale-95 transition-all border border-slate-200">
-      <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
-      গুগল দিয়ে লগইন করুন
-    </button>
-    <p class="text-[11px] text-slate-500 mt-6">লগইন করলেই আপনার নাম, ইমেইল ও প্রোফাইল ছবি স্বয়ংক্রিয়ভাবে সেভ হবে।</p>
-    ${footerCredit()}
-  </div>`;
-}
-
-function buildSuspended(){
-  const wa = window.CFG.developerWhatsapp;
-  return `
-  <div class="flex-1 flex flex-col items-center justify-center px-6 text-center">
-    <div class="w-16 h-16 rounded-3xl bg-vRose/10 text-vRose flex items-center justify-center mb-5 border border-vRose/20"><i data-lucide="shield-off" class="w-8 h-8"></i></div>
-    <h2 class="disp text-2xl font-bold mb-2">একাউন্ট সাসপেন্ড করা হয়েছে</h2>
-    <p class="text-sm text-slate-500 max-w-xs mb-1">${window.profile.suspend_reason || 'নিয়ম লঙ্ঘনের কারণে আপনার একাউন্টটি সাময়িকভাবে বন্ধ রাখা হয়েছে।'}</p>
-    <p class="text-xs text-slate-500 mb-6">বিস্তারিত জানতে ডেভেলপারের সাথে যোগাযোগ করুন।</p>
-    <div class="flex flex-col gap-3 w-full max-w-xs">
-      ${wa ? `<a href="${wa}" target="_blank" class="py-3.5 bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp এ যোগাযোগ করুন</a>` : ''}
-      <button type="button" onclick="window.logout()" class="py-3.5 bg-slate-200 dark:bg-slate-800 rounded-2xl font-bold">লগআউট</button>
+  <div class="fixed top-6 inset-x-0 flex flex-col items-center justify-center text-[11px] text-slate-500 font-semibold z-50">
+    <p>Developed by <a href="https://linkedin.com/in/RahatAhmedX" target="_blank" class="text-vEmerald font-bold hover:underline">Rahat</a></p>
+    <a href="https://github.com/Rahat0764" target="_blank" class="mt-1 flex items-center gap-1.5 hover:text-vEmerald"><i data-lucide="github" class="w-3.5 h-3.5"></i> GitHub</a>
+  </div>
+  <div class="flex-1 flex flex-col items-center justify-center px-6 text-center py-10 w-full max-w-md mx-auto">
+    <div class="glass p-8 md:p-10 rounded-[40px] w-full flex flex-col items-center shadow-2xl relative">
+      <div class="w-20 h-20 rounded-[28px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-6 absolute -top-10 border-4 border-white dark:border-[#060b09]"><i data-lucide="vault" class="w-10 h-10 text-[#04150c]"></i></div>
+      <h1 class="disp text-4xl font-extrabold mb-3 mt-6">Vault</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed px-2">${_t('tagline')}</p>
+      <button type="button" onclick="window.loginGoogle()" class="w-full flex items-center justify-center gap-3 bg-white text-slate-800 px-6 py-4 rounded-2xl font-bold shadow-lg shadow-black/5 active:scale-95 transition-all border border-slate-200">
+        <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
+        ${_t('login_btn')}
+      </button>
+      <p class="text-[10px] text-slate-400 mt-5">${_t('auto_save')}</p>
     </div>
   </div>`;
 }
 
-function footerCredit(){
-  return `
-  <div class="mt-10 flex items-center justify-center gap-2 text-[10px] md:text-[11px] text-slate-500 font-semibold">
-    <span>Developed by <a href="https://linkedin.com/in/RahatAhmedX" target="_blank" class="text-vEmerald font-bold hover:underline">Rahat</a></span>
-    <span class="w-1 h-1 rounded-full bg-slate-400"></span>
-    <a href="https://github.com/Rahat0764" target="_blank" class="font-bold text-slate-600 dark:text-slate-300 hover:text-vEmerald flex items-center gap-1.5">
-      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-      GitHub
-    </a>
+function buildSuspended(){
+  return `<div class="flex-1 flex flex-col items-center justify-center px-6 text-center">
+    <div class="w-16 h-16 rounded-3xl bg-vRose/10 text-vRose flex items-center justify-center mb-5 border border-vRose/20"><i data-lucide="shield-off" class="w-8 h-8"></i></div>
+    <h2 class="disp text-2xl font-bold mb-2">Account Suspended</h2>
+    <p class="text-sm text-slate-500 max-w-xs mb-6">${window.profile.suspend_reason || 'Violation of terms.'}</p>
+    <button type="button" onclick="window.logout()" class="py-3.5 px-8 bg-slate-200 dark:bg-slate-800 rounded-2xl font-bold">Logout</button>
   </div>`;
 }
 
 /* ---------------- app shell (logged in) ---------------- */
 function buildShell(innerHtml){
-  const p = window.profile || {};
-  const isSuper = window.adminToken;
+  const p = window.profile || {}; const isSuper = window.adminToken;
   return `
-  <header class="glass z-40 shrink-0 border-b px-4 py-3 relative">
-    <div class="max-w-5xl mx-auto flex justify-between items-center gap-2">
-      <div class="flex items-center gap-3 min-w-0 cursor-pointer select-none" onclick="window.handleLogoTap()">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-lg shrink-0"><i data-lucide="vault" class="w-5 h-5 text-[#04150c]"></i></div>
-        <div class="min-w-0"><h1 class="disp text-lg font-bold leading-none">Vault</h1><p class="text-[10px] text-slate-500 font-bold tracking-widest uppercase">Fund Tracker</p></div>
+  <header class="glass sticky top-0 z-40 border-b px-4 py-3 shadow-sm">
+    <div class="max-w-3xl mx-auto flex justify-between items-center gap-2">
+      <div class="flex items-center gap-3 cursor-pointer select-none" onclick="window.handleLogoTap()">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-lg"><i data-lucide="vault" class="w-5 h-5 text-[#04150c]"></i></div>
+        <div><h1 class="disp text-lg font-bold leading-none">Vault</h1><p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Fund Tracker</p></div>
       </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <button type="button" onclick="window.toggleTheme()" class="relative w-11 h-6 rounded-full bg-slate-300 dark:bg-slate-700 flex items-center p-1 border border-slate-300 dark:border-slate-800" id="themeBtn">
-          <div id="themeSlider" class="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-300"></div>
+      <div class="flex items-center gap-4">
+        <button type="button" onclick="window.toggleTheme()" class="relative w-14 h-7 bg-slate-300 dark:bg-slate-700 rounded-full flex items-center px-1 cursor-pointer transition-colors border border-slate-300 dark:border-slate-600 shadow-inner" id="themeBtn">
+          <i data-lucide="moon" class="absolute right-2 w-3.5 h-3.5 text-slate-400"></i>
+          <i data-lucide="sun" class="absolute left-2 w-3.5 h-3.5 text-amber-500"></i>
+          <div id="themeSlider" class="w-5 h-5 bg-white rounded-full shadow z-10 transform transition-transform duration-300"></div>
         </button>
         <img src="${p.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(p.full_name||'U')}" class="w-9 h-9 rounded-full object-cover border-2 border-vEmerald/40 cursor-pointer" onclick="window.changeTab('profile')">
       </div>
     </div>
   </header>
 
-  <div id="main-scroll" class="flex-1 overflow-y-auto w-full pb-32 pt-5 px-4 md:px-6 hide-scrollbar">
-    <main class="max-w-5xl mx-auto fade-in">${innerHtml}</main>
-  </div>
+  <main class="flex-1 w-full max-w-2xl mx-auto pb-28 pt-5 px-4 md:px-6 fade-in">${innerHtml}</main>
 
-  <nav class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-md glass z-40 rounded-2xl border shadow-2xl">
+  <nav class="fixed bottom-4 inset-x-0 mx-auto w-[92%] max-w-md glass z-40 rounded-2xl border shadow-2xl">
     <div class="flex justify-around items-center h-16 px-1">
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('dashboard')" data-tab="dashboard"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider mt-0.5">হোম</span></button>
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('add')" data-tab="add"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider mt-0.5">এন্ট্রি</span></button>
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('history')" data-tab="history"><i data-lucide="history" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider mt-0.5">হিস্ট্রি</span></button>
-      ${isSuper ? `<button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('manage')" data-tab="manage"><i data-lucide="shield" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider mt-0.5">ম্যানেজ</span></button>` : ''}
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('profile')" data-tab="profile"><i data-lucide="user-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider mt-0.5">প্রোফাইল</span></button>
+      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('dashboard')" data-tab="dashboard"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('dashboard')}</span></button>
+      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('add')" data-tab="add"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('add')}</span></button>
+      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('history')" data-tab="history"><i data-lucide="history" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('history')}</span></button>
+      ${isSuper ? `<button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('manage')" data-tab="manage"><i data-lucide="shield" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('manage')}</span></button>` : ''}
+      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('profile')" data-tab="profile"><i data-lucide="user-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('profile')}</span></button>
     </div>
   </nav>`;
 }
 
 window.handleLogoTap = () => {
-  window.logoTapCount++;
-  if (window.logoTapCount >= 5) { window.logoTapCount = 0; window.openMasterKeyModal(); }
+  window.logoTapCount++; if (window.logoTapCount >= 5) { window.logoTapCount = 0; window.openMasterKeyModal(); }
   setTimeout(()=>{ window.logoTapCount = 0; }, 2500);
 };
 
 function updateNav(){
   document.querySelectorAll('.nav-btn').forEach(b=>{
     const on = b.dataset.tab === window.activeTab;
-    b.classList.toggle('text-vEmerald', on);
-    b.classList.toggle('text-slate-500', !on);
+    b.classList.toggle('text-vEmerald', on); b.classList.toggle('text-slate-500', !on);
   });
-  const slider = document.getElementById('themeSlider');
-  if (slider) slider.classList.toggle('translate-x-5', document.documentElement.classList.contains('dark'));
+  const htmlDark = document.documentElement.classList.contains('dark');
+  document.getElementById('themeSlider')?.classList.toggle('translate-x-[26px]', htmlDark);
 }
-
-window.changeTab = (tab) => {
-  if (tab === 'manage' && !window.adminToken) return;
-  window.activeTab = tab;
-  localStorage.setItem('vault_tab', tab);
-  window.render();
-};
-
-window.toggleTheme = () => {
-  const html = document.documentElement;
-  html.classList.toggle('dark');
-  localStorage.setItem('vault_theme', html.classList.contains('dark') ? 'dark' : 'light');
-  const slider = document.getElementById('themeSlider');
-  if (slider) slider.classList.toggle('translate-x-5', html.classList.contains('dark'));
-};
+window.changeTab = (tab) => { if (tab === 'manage' && !window.adminToken) return; window.activeTab = tab; localStorage.setItem('vault_tab', tab); window.render(); };
+window.toggleTheme = () => { const html = document.documentElement; html.classList.toggle('dark'); localStorage.setItem('vault_theme', html.classList.contains('dark') ? 'dark' : 'light'); updateNav(); };
 
 /* ---------------- tab router ---------------- */
 function buildTabContent(){
@@ -313,334 +328,294 @@ function buildTabContent(){
 }
 
 /* ---------------- dashboard ---------------- */
-function monthProgress(){
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-  const day = now.getDate();
-  const left = daysInMonth - day;
-  const pct = day / daysInMonth;
-  return { day, daysInMonth, left, pct };
-}
-
 function buildDashboard(){
   const income = window.txns.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
   const expense = window.txns.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
   const balance = income - expense;
-  const now = new Date();
-  const mp = monthProgress();
-  const r = 42, circ = 2*Math.PI*r;
-  const offset = circ * (1 - mp.pct);
-  const dateStr = `${BN_MONTHS[now.getMonth()]} ${bnNum(now.getDate())}, ${bnNum(now.getFullYear())}`;
-
-  let html = `
+  const now = new Date(); const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const day = now.getDate(); const left = daysInMonth - day; const pct = day / daysInMonth;
+  const r = 42, circ = 2*Math.PI*r; const offset = circ * (1 - pct);
+  
+  return `
   <div class="cut glass border p-6 md:p-8 relative overflow-hidden mb-6">
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+    <div class="flex justify-between items-center gap-6">
       <div>
-        <p class="text-vEmerald font-bold text-[10px] uppercase tracking-[0.2em] mb-1 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-vEmerald animate-pulse"></span> ${BN_DAYS[now.getDay()]}</p>
-        <h2 class="disp text-2xl md:text-3xl font-bold mb-1">${dateStr}</h2>
-        <p class="text-sm text-slate-500 font-semibold">স্বাগতম, ${window.profile.full_name || 'বন্ধু'}</p>
+        <p class="text-vEmerald font-bold text-[10px] uppercase tracking-[0.2em] mb-1 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-vEmerald animate-pulse"></span> ${window.lang==='en'?EN_DAYS[now.getDay()]:BN_DAYS[now.getDay()]}</p>
+        <h2 class="disp text-2xl md:text-3xl font-bold mb-1">${formatDate(now)}</h2>
+        <p class="text-sm text-slate-500 font-semibold">${_t('welcome')}, ${window.profile.full_name.split(' ')[0]}</p>
       </div>
-      <div class="flex items-center gap-4 shrink-0">
-        <svg width="100" height="100" viewBox="0 0 100 100" class="-rotate-90">
-          <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-track"></circle>
-          <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-prog" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"></circle>
-          <text x="50" y="46" text-anchor="middle" fill="currentColor" font-size="22" font-weight="800" transform="rotate(90 50 50)" font-family="Sora">${bnNum(mp.left)}</text>
-          <text x="50" y="63" text-anchor="middle" fill="currentColor" opacity="0.5" font-size="9" transform="rotate(90 50 50)" font-family="Hind Siliguri">দিন বাকি</text>
-        </svg>
-      </div>
+      <svg width="100" height="100" viewBox="0 0 100 100" class="-rotate-90 shrink-0">
+        <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-track"></circle>
+        <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-prog" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"></circle>
+        <text x="50" y="46" text-anchor="middle" fill="currentColor" font-size="22" font-weight="800" transform="rotate(90 50 50)" font-family="Sora">${bnNum(left)}</text>
+        <text x="50" y="63" text-anchor="middle" fill="currentColor" opacity="0.5" font-size="9" transform="rotate(90 50 50)">${_t('days_left')}</text>
+      </svg>
     </div>
   </div>
 
   <div class="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
-    ${statCard('মোট আয়', '৳'+bnNum(income), 'arrow-down-circle', 'from-vEmerald to-vEmeraldDim', ()=>window.changeTab('add'))}
-    ${statCard('মোট ব্যয়', '৳'+bnNum(expense), 'arrow-up-circle', 'from-vRose to-rose-700', ()=>window.changeTab('add'))}
+    ${statCard(_t('total_in'), '৳ '+bnNum(income), 'arrow-down-circle', 'from-vEmerald to-emerald-700', ()=>window.changeTab('add'))}
+    ${statCard(_t('total_out'), '৳ '+bnNum(expense), 'arrow-up-circle', 'from-vRose to-rose-700', ()=>window.changeTab('add'))}
     <div class="col-span-2 md:col-span-1 cut bg-gradient-to-br from-vGold to-amber-600 p-5 relative overflow-hidden shadow-lg border border-white/10 cursor-pointer" onclick="window.changeTab('history')">
       <i data-lucide="wallet" class="absolute -right-3 -bottom-3 w-24 h-24 text-white/20"></i>
-      <span class="text-[10px] font-bold uppercase tracking-widest text-white/90 block mb-1">মোট ফান্ডে আছে</span>
-      <h3 class="text-2xl md:text-3xl font-bold disp text-white relative z-10">৳${bnNum(balance)}</h3>
+      <span class="text-[10px] font-bold uppercase tracking-widest text-white/90 block mb-1">${_t('balance')}</span>
+      <h3 class="text-2xl md:text-3xl font-bold disp text-white relative z-10">৳ ${bnNum(balance)}</h3>
     </div>
   </div>
 
-  <div class="glass border rounded-3xl overflow-hidden">
+  <div class="glass border rounded-[28px] overflow-hidden shadow-sm">
     <div class="p-4 border-b flex items-center justify-between">
-      <div class="flex items-center gap-2"><i data-lucide="clock" class="w-4 h-4 text-vEmerald"></i><h3 class="font-bold disp tracking-wide">সাম্প্রতিক লেনদেন</h3></div>
-      <button type="button" onclick="window.changeTab('history')" class="text-[11px] font-bold text-vEmerald">সব দেখুন</button>
+      <div class="flex items-center gap-2"><i data-lucide="clock" class="w-4 h-4 text-vEmerald"></i><h3 class="font-bold disp tracking-wide">${_t('recent')}</h3></div>
+      <button type="button" onclick="window.changeTab('history')" class="text-[11px] font-bold text-vEmerald">${_t('see_all')}</button>
     </div>
     <div class="divide-y divide-slate-100 dark:divide-white/5">
-      ${window.txns.slice(0,6).map(txnRow).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">এখনো কোনো এন্ট্রি নেই। "এন্ট্রি" ট্যাব থেকে যোগ করুন।</div>`}
+      ${window.txns.slice(0,5).map(txnRow).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`}
     </div>
   </div>`;
-  return html;
 }
 
 function statCard(label, value, icon, grad, onClick){
   return `<div onclick="(${onClick.toString()})()" class="cut bg-gradient-to-br ${grad} p-5 relative overflow-hidden shadow-lg border border-white/10 cursor-pointer">
     <i data-lucide="${icon}" class="absolute -right-3 -bottom-3 w-24 h-24 text-white/20"></i>
     <span class="text-[10px] font-bold uppercase tracking-widest text-white/90 block mb-1">${label}</span>
-    <h3 class="text-2xl md:text-3xl font-bold disp text-white relative z-10">${value}</h3>
+    <h3 class="text-2xl font-bold disp text-white relative z-10">${value}</h3>
   </div>`;
 }
-
 function txnRow(t){
-  const isIncome = t.type === 'income';
-  const d = new Date(t.txn_date);
-  const dateLabel = `${bnNum(d.getDate())} ${BN_MONTHS[d.getMonth()]}`;
+  const isIncome = t.type === 'income'; const d = new Date(t.txn_date);
   return `<div class="p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-    <div class="w-10 h-10 rounded-2xl ${isIncome?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0">
-      <i data-lucide="${isIncome?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i>
-    </div>
+    <div class="w-10 h-10 rounded-2xl ${isIncome?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0"><i data-lucide="${isIncome?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
     <div class="min-w-0 flex-1">
-      <p class="text-sm font-bold truncate">${t.category}${t.source_place ? ' · '+t.source_place : ''}</p>
-      <p class="text-[10px] text-slate-500 font-semibold mono">#${t.ref_id} · ${dateLabel}</p>
+      <p class="text-sm font-bold truncate">${t.category}</p>
+      <p class="text-[10px] text-slate-500 font-semibold mono">#${t.ref_id} &bull; ${formatDate(d)}</p>
     </div>
-    <span class="font-bold disp ${isIncome?'text-vEmerald':'text-vRose'}">${isIncome?'+':'-'}৳${bnNum(t.amount)}</span>
+    <span class="font-bold disp ${isIncome?'text-vEmerald':'text-vRose'}">${isIncome?'+':'-'}৳ ${bnNum(t.amount)}</span>
   </div>`;
 }
 
 /* ---------------- add transaction ---------------- */
+window._entryType = 'income';
 function buildAdd(){
   return `
-  <h2 class="disp text-2xl font-bold mb-5 flex items-center gap-2"><i data-lucide="plus-circle" class="w-6 h-6 text-vEmerald"></i> নতুন এন্ট্রি</h2>
-  <div class="glass border rounded-3xl p-5 md:p-6">
-    <div class="grid grid-cols-2 gap-2 mb-5 bg-slate-100 dark:bg-black/30 p-1.5 rounded-2xl">
-      <button type="button" id="typeIncomeBtn" onclick="window.setEntryType('income')" class="py-3 rounded-xl font-bold text-sm transition-all">আয়</button>
-      <button type="button" id="typeExpenseBtn" onclick="window.setEntryType('expense')" class="py-3 rounded-xl font-bold text-sm transition-all">ব্যয়</button>
-    </div>
+  <h2 class="disp text-2xl font-bold mb-5 flex items-center gap-2"><i data-lucide="plus-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('new_entry')}</h2>
+  <div class="glass border rounded-[28px] p-5 md:p-6 shadow-sm">
     <div class="space-y-4">
-      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">ক্যাটাগরি</label>
-        <select id="entryCategory" class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm font-bold outline-none appearance-none"></select>
+      <div>
+        <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('amount_label')}</label>
+        <div class="relative"><span class="absolute left-4 top-4 font-bold text-slate-400">৳</span><input id="entryAmount" type="number" placeholder="0.00" class="w-full pl-10 pr-4 py-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-xl font-bold outline-none mono focus:border-vEmerald transition-colors"></div>
       </div>
-      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">উৎস / স্থান (ঐচ্ছিক)</label>
-        <input id="entrySource" placeholder="যেমন: বাবা, নগদ, ক্লায়েন্ট নাম..." class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm font-bold outline-none">
+      <div class="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-black/40 p-1.5 rounded-2xl">
+        <button type="button" id="typeIncomeBtn" onclick="window.setEntryType('income')" class="py-3 rounded-xl font-bold text-sm transition-all shadow-md bg-vEmerald text-[#04150c]">${_t('income')}</button>
+        <button type="button" id="typeExpenseBtn" onclick="window.setEntryType('expense')" class="py-3 rounded-xl font-bold text-sm transition-all text-slate-500">${_t('expense')}</button>
       </div>
-      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">পরিমাণ (৳)</label>
-        <input id="entryAmount" type="number" placeholder="0" class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-lg font-bold outline-none mono">
+      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('where_label')} *</label>
+        <input id="entrySource" placeholder="..." class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm font-bold outline-none focus:border-vEmerald transition-colors">
       </div>
-      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">তারিখ</label>
+      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('note_label')}</label>
+        <textarea id="entryNote" rows="2" class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm outline-none focus:border-vEmerald transition-colors"></textarea>
+      </div>
+      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('date_label')}</label>
         <input id="entryDate" type="date" value="${new Date().toISOString().split('T')[0]}" class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm font-bold outline-none">
       </div>
-      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">নোট (ঐচ্ছিক)</label>
-        <textarea id="entryNote" rows="2" placeholder="অতিরিক্ত তথ্য..." class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm font-medium outline-none"></textarea>
-      </div>
-      <button type="button" id="entrySaveBtn" onclick="window.submitEntry()" class="w-full py-4 rounded-xl bg-vEmerald text-[#04150c] font-bold shadow-lg shadow-vEmerald/30 active:scale-95 transition-all disp tracking-wide text-lg flex items-center justify-center gap-2"><i data-lucide="check" class="w-5 h-5"></i> সেভ করুন</button>
+      <button type="button" id="entrySaveBtn" onclick="window.submitEntry()" class="w-full mt-2 py-4 rounded-xl bg-vEmerald text-[#04150c] font-bold shadow-lg shadow-vEmerald/30 active:scale-95 transition-all disp tracking-wide text-lg flex items-center justify-center gap-2"><i data-lucide="check" class="w-5 h-5"></i> ${_t('save')}</button>
     </div>
   </div>`;
 }
 
-window._entryType = 'income';
 window.setEntryType = (type) => {
   window._entryType = type;
-  const incomeBtn = document.getElementById('typeIncomeBtn'), expBtn = document.getElementById('typeExpenseBtn');
-  incomeBtn.className = `py-3 rounded-xl font-bold text-sm transition-all ${type==='income'?'bg-vEmerald text-[#04150c] shadow-md':'text-slate-500'}`;
-  expBtn.className = `py-3 rounded-xl font-bold text-sm transition-all ${type==='expense'?'bg-vRose text-white shadow-md':'text-slate-500'}`;
-  const cats = type === 'income' ? INCOME_CATS : EXPENSE_CATS;
-  document.getElementById('entryCategory').innerHTML = cats.map(c=>`<option>${c}</option>`).join('');
+  document.getElementById('typeIncomeBtn').className = `py-3 rounded-xl font-bold text-sm transition-all ${type==='income'?'bg-vEmerald text-[#04150c] shadow-md':'text-slate-500'}`;
+  document.getElementById('typeExpenseBtn').className = `py-3 rounded-xl font-bold text-sm transition-all ${type==='expense'?'bg-vRose text-white shadow-md':'text-slate-500'}`;
   const saveBtn = document.getElementById('entrySaveBtn');
-  saveBtn.className = `w-full py-4 rounded-xl ${type==='income'?'bg-vEmerald text-[#04150c] shadow-vEmerald/30':'bg-vRose text-white shadow-vRose/30'} font-bold shadow-lg active:scale-95 transition-all disp tracking-wide text-lg flex items-center justify-center gap-2`;
-  saveBtn.innerHTML = `<i data-lucide="check" class="w-5 h-5"></i> সেভ করুন`;
-  lucide.createIcons();
+  saveBtn.className = `w-full mt-2 py-4 rounded-xl ${type==='income'?'bg-vEmerald text-[#04150c] shadow-vEmerald/30':'bg-vRose text-white shadow-vRose/30'} font-bold shadow-lg active:scale-95 transition-all disp tracking-wide text-lg flex items-center justify-center gap-2`;
 };
 
 window.submitEntry = async () => {
-  const btn = document.getElementById('entrySaveBtn');
-  const og = btn.innerHTML; btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto"></i>'; btn.disabled = true; lucide.createIcons();
+  const btn = document.getElementById('entrySaveBtn'); const og = btn.innerHTML; btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto"></i>'; btn.disabled = true; lucide.createIcons();
   try {
     const amount = Number(document.getElementById('entryAmount').value);
-    if (!amount || amount <= 0) throw new Error('সঠিক পরিমাণ দিন');
-    const row = {
-      user_id: window.session.user.id,
-      type: window._entryType,
-      category: document.getElementById('entryCategory').value,
-      source_place: document.getElementById('entrySource').value || null,
-      amount,
-      note: document.getElementById('entryNote').value || null,
-      txn_date: document.getElementById('entryDate').value,
-      ref_id: refId()
-    };
+    const source = document.getElementById('entrySource').value.trim();
+    if (!amount || amount <= 0 || !source) throw new Error(_t('req_fields'));
+    const row = { user_id: window.session.user.id, type: window._entryType, category: source, amount, note: document.getElementById('entryNote').value||null, txn_date: document.getElementById('entryDate').value, ref_id: refId() };
     const { error } = await window.supa.from('transactions').insert([row]);
     if (error) throw error;
-    window.showToast('এন্ট্রি সেভ হয়েছে!');
-    window.notify('transaction_add', row);
-    await window.loadTxns();
-    document.getElementById('entryAmount').value = '';
-    document.getElementById('entrySource').value = '';
-    document.getElementById('entryNote').value = '';
-    window.changeTab('dashboard');
+    window.showToast(_t('save_success')); window.notify('transaction_add', row);
+    await window.loadTxns(); window.changeTab('dashboard');
   } catch(e){ window.showToast(e.message, 'error'); btn.innerHTML = og; btn.disabled = false; lucide.createIcons(); }
 };
 
 /* ---------------- history ---------------- */
-window._historyFilter = 'all';
-window._historySearch = '';
+window._historyFilter = 'all'; window._historySearch = '';
 function buildHistory(){
   let list = window.txns.filter(t => window._historyFilter==='all' || t.type===window._historyFilter);
-  if (window._historySearch) {
-    const q = window._historySearch.toLowerCase();
-    list = list.filter(t => (t.category+' '+(t.source_place||'')+' '+t.ref_id+' '+(t.note||'')).toLowerCase().includes(q));
-  }
+  if (window._historySearch) { const q = window._historySearch.toLowerCase(); list = list.filter(t => (t.category+' '+t.ref_id+' '+(t.note||'')).toLowerCase().includes(q)); }
   return `
-  <h2 class="disp text-2xl font-bold mb-4 flex items-center gap-2"><i data-lucide="history" class="w-6 h-6 text-vEmerald"></i> সম্পূর্ণ হিস্ট্রি</h2>
+  <h2 class="disp text-2xl font-bold mb-4 flex items-center gap-2"><i data-lucide="history" class="w-6 h-6 text-vEmerald"></i> ${_t('history_title')}</h2>
   <div class="flex gap-2 mb-4">
-    ${['all','income','expense'].map(f=>{
-      const active = window._historyFilter===f;
-      const label = f==='all'?'সব':(f==='income'?'আয়':'ব্যয়');
-      return `<button type="button" onclick="window.setHistFilter('${f}')" class="px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${active?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-transparent border-slate-200 dark:border-white/10 text-slate-500'}">${label}</button>`;
-    }).join('')}
+    ${['all','income','expense'].map(f=> `<button type="button" onclick="window._historyFilter='${f}'; window.render();" class="px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${window._historyFilter===f?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-transparent border-slate-200 dark:border-white/10 text-slate-500'}">${f==='all'?_t('all'):(f==='income'?_t('income'):_t('expense'))}</button>`).join('')}
     <div class="relative flex-1">
-      <i data-lucide="search" class="absolute left-3 top-3 w-4 h-4 text-slate-400"></i>
-      <input oninput="window._historySearch=this.value; window.render();" value="${window._historySearch}" placeholder="খুঁজুন..." class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border text-xs font-bold outline-none">
+      <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+      <input oninput="window._historySearch=this.value; window.render();" value="${window._historySearch}" placeholder="${_t('search')}" class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border text-xs font-bold outline-none">
     </div>
   </div>
-  <div class="glass border rounded-3xl overflow-hidden">
-    <div class="divide-y divide-slate-100 dark:divide-white/5 max-h-[65vh] overflow-y-auto hide-scrollbar">
-      ${list.map(t=>historyRow(t)).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">কোনো এন্ট্রি পাওয়া যায়নি।</div>`}
-    </div>
-  </div>`;
-}
-window.setHistFilter = (f) => { window._historyFilter = f; window.render(); };
-
-function historyRow(t){
-  const isIncome = t.type === 'income';
-  const d = new Date(t.txn_date);
-  const dateLabel = `${bnNum(d.getDate())} ${BN_MONTHS[d.getMonth()]}, ${bnNum(d.getFullYear())}`;
-  return `<div class="p-4 flex items-center gap-3">
-    <div class="w-10 h-10 rounded-2xl ${isIncome?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0"><i data-lucide="${isIncome?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
-    <div class="min-w-0 flex-1">
-      <p class="text-sm font-bold truncate">${t.category}${t.source_place ? ' · '+t.source_place : ''}</p>
-      <p class="text-[10px] text-slate-500 font-semibold mono">#${t.ref_id} · ${dateLabel}</p>
-      ${t.note ? `<p class="text-[11px] text-slate-500 mt-1">${t.note}</p>` : ''}
-    </div>
-    <div class="text-right shrink-0">
-      <span class="font-bold disp block ${isIncome?'text-vEmerald':'text-vRose'}">${isIncome?'+':'-'}৳${bnNum(t.amount)}</span>
-      <button type="button" onclick="window.deleteTxn('${t.id}', ${t.amount}, '${t.ref_id}')" class="text-[10px] text-slate-400 hover:text-vRose font-bold mt-1">মুছুন</button>
+  <div class="glass border rounded-[28px] overflow-hidden shadow-sm">
+    <div class="divide-y divide-slate-100 dark:divide-white/5">
+      ${list.map(t=> `<div class="p-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl ${t.type==='income'?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0"><i data-lucide="${t.type==='income'?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-bold truncate">${t.category}</p>
+          <p class="text-[10px] text-slate-500 font-semibold mono">#${t.ref_id} &bull; ${formatDate(new Date(t.txn_date))}</p>
+          ${t.note ? `<p class="text-[11px] text-slate-500 mt-1 truncate">${t.note}</p>` : ''}
+        </div>
+        <div class="text-right shrink-0">
+          <span class="font-bold disp block ${t.type==='income'?'text-vEmerald':'text-vRose'}">${t.type==='income'?'+':'-'}৳ ${bnNum(t.amount)}</span>
+          <button type="button" onclick="window.deleteTxn('${t.id}')" class="text-[10px] text-slate-400 hover:text-vRose font-bold mt-1">${_t('del')}</button>
+        </div>
+      </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`}
     </div>
   </div>`;
 }
 
-window.deleteTxn = async (id, amount, ref) => {
+window.deleteTxn = async (id) => {
   try {
-    const pin = await window.askPin('মুছে ফেলতে পিন দিন', 'নিরাপত্তার জন্য আপনার ৬ সংখ্যার পিন প্রয়োজন');
+    const pin = await window.askPin('Confirm Delete', 'Enter PIN to delete');
     await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
-    const { error } = await window.supa.from('transactions').delete().eq('id', id);
-    if (error) throw error;
-    window.showToast('এন্ট্রি মুছে ফেলা হয়েছে');
-    window.notify('transaction_delete', { ref_id: ref, amount });
-    await window.loadTxns();
-    window.render();
-  } catch(e){ if (e.message !== 'cancelled') window.showToast(e.message, 'error'); }
+    await window.supa.from('transactions').delete().eq('id', id); window.showToast('Deleted'); await window.loadTxns(); window.render();
+  } catch(e){}
 };
 
-/* ---------------- profile ---------------- */
+/* ---------------- profile & settings ---------------- */
 function buildProfile(){
   const p = window.profile;
   return `
-  <h2 class="disp text-2xl font-bold mb-5 flex items-center gap-2"><i data-lucide="user-circle" class="w-6 h-6 text-vEmerald"></i> প্রোফাইল</h2>
-
-  <div class="glass border rounded-3xl p-6 mb-5 text-center">
+  <h2 class="disp text-2xl font-bold mb-5 flex items-center gap-2"><i data-lucide="user-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('profile')}</h2>
+  <div class="glass border rounded-[28px] p-6 mb-5 text-center shadow-sm">
     <div class="relative w-24 h-24 mx-auto mb-3">
       <img src="${p.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(p.full_name||'U')}" class="w-24 h-24 rounded-full object-cover border-4 border-vEmerald/30">
-      <button type="button" onclick="document.getElementById('avatarInput').click()" class="absolute bottom-0 right-0 w-8 h-8 bg-vEmerald text-[#04150c] rounded-full flex items-center justify-center border-2 border-white dark:border-vCard shadow-lg"><i data-lucide="camera" class="w-4 h-4"></i></button>
-      <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="window.uploadAvatar(event)">
+      <button type="button" onclick="document.getElementById('avatarInput').click()" class="absolute bottom-0 right-0 w-8 h-8 bg-vEmerald text-[#04150c] rounded-full flex items-center justify-center border-2 border-white dark:border-[#060b09] shadow-lg"><i data-lucide="camera" class="w-4 h-4"></i></button>
+      <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="window.initCropper(event)">
     </div>
-    <h3 class="disp text-xl font-bold">${p.full_name || 'ব্যবহারকারী'}</h3>
+    <h3 class="disp text-xl font-bold">${p.full_name || 'User'}</h3>
     <p class="text-xs text-slate-500 font-semibold">${p.email}</p>
   </div>
-
-  <div class="glass border rounded-3xl p-5 mb-5">
-    <h3 class="font-bold disp mb-3 flex items-center gap-2"><i data-lucide="lock-keyhole" class="w-4 h-4 text-vGold"></i> নিরাপত্তা পিন</h3>
-    <button type="button" onclick="window.changePin()" class="w-full py-3.5 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><i data-lucide="key-round" class="w-4 h-4"></i> পিন পরিবর্তন করুন</button>
+  <div class="glass border rounded-[28px] p-5 mb-5 space-y-3">
+    <button type="button" onclick="window.lang=window.lang==='bn'?'en':'bn'; localStorage.setItem('vault_lang',window.lang); window.render();" class="w-full py-3.5 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><i data-lucide="languages" class="w-4 h-4 text-vIndigo"></i> ${_t('lang_switch')}</button>
+    <button type="button" onclick="window.changePin()" class="w-full py-3.5 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><i data-lucide="key-round" class="w-4 h-4 text-vGold"></i> ${_t('change_pin')}</button>
   </div>
-
-  <div class="glass border rounded-3xl overflow-hidden mb-5">
-    <div class="p-4 border-b flex items-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-vIndigo"></i><h3 class="font-bold disp">ডেভেলপার থেকে ফিডব্যাক</h3></div>
-    <div class="divide-y divide-slate-100 dark:divide-white/5 max-h-64 overflow-y-auto hide-scrollbar">
-      ${window.feedbackList.map(f=>`<div class="p-4"><p class="text-sm font-semibold">${f.message}</p><p class="text-[10px] text-slate-500 mt-1">${new Date(f.created_at).toLocaleString('bn-BD')}</p></div>`).join('') || `<div class="p-6 text-center text-slate-500 text-sm">কোনো ফিডব্যাক নেই</div>`}
-    </div>
-    ${window.CFG.developerWhatsapp ? `<a href="${window.CFG.developerWhatsapp}" target="_blank" class="block p-4 text-center text-sm font-bold text-vEmerald border-t"><i data-lucide="message-circle" class="inline w-4 h-4 mb-0.5 mr-1"></i> ডেভেলপারের সাথে যোগাযোগ করুন</a>` : ''}
+  <div class="glass border border-vRose/20 rounded-[28px] p-5 mb-6">
+    <h3 class="font-bold disp mb-3 text-vRose flex items-center gap-2"><i data-lucide="alert-triangle" class="w-4 h-4"></i> ${_t('danger')}</h3>
+    <button type="button" onclick="window.fullReset()" class="w-full py-3.5 bg-vRose/10 text-vRose border border-vRose/30 rounded-xl font-bold text-sm">${_t('reset_all')}</button>
   </div>
-
-  <div class="glass border border-vRose/20 rounded-3xl p-5 mb-6">
-    <h3 class="font-bold disp mb-1 text-vRose flex items-center gap-2"><i data-lucide="alert-triangle" class="w-4 h-4"></i> বিপদজনক অঞ্চল</h3>
-    <p class="text-xs text-slate-500 mb-3">সম্পূর্ণ হিস্ট্রি রিসেট করলে সকল আয়-ব্যয়ের ডেটা স্থায়ীভাবে মুছে যাবে।</p>
-    <button type="button" onclick="window.fullReset()" class="w-full py-3.5 bg-vRose/10 text-vRose border border-vRose/30 rounded-xl font-bold text-sm">সম্পূর্ণ হিস্ট্রি রিসেট করুন</button>
-  </div>
-
-  <button type="button" onclick="window.logout()" class="w-full py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 mb-6"><i data-lucide="log-out" class="w-4 h-4"></i> লগআউট</button>
-  ${footerCredit()}
+  <button type="button" onclick="window.logout()" class="w-full py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 mb-6"><i data-lucide="log-out" class="w-4 h-4"></i> ${_t('logout')}</button>
   `;
 }
 
-window.uploadAvatar = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (file.size > 5*1024*1024) return window.showToast('ছবির সাইজ ৫MB এর কম হতে হবে', 'error');
-  try {
-    window.showToast('ছবি আপলোড হচ্ছে...', 'info');
-    const path = `${window.session.user.id}/avatar_${Date.now()}.jpg`;
-    const { error: upErr } = await window.supa.storage.from('avatars').upload(path, file, { contentType: file.type, upsert: true });
-    if (upErr) throw upErr;
-    const { data: pub } = window.supa.storage.from('avatars').getPublicUrl(path);
-    const { error } = await window.supa.from('profiles').update({ avatar_url: pub.publicUrl }).eq('id', window.session.user.id);
-    if (error) throw error;
-    await window.loadProfile();
-    window.render();
-    window.showToast('প্রোফাইল ছবি পরিবর্তন হয়েছে!');
-  } catch(err){ window.showToast(err.message, 'error'); }
-};
-
 async function forceSetPin(){
   try {
-    const p1 = await window.askPin('স্বাগতম! আপনার নিরাপত্তা পিন সেট করুন', 'প্রথমবার তাই ৬ সংখ্যার একটি পিন দিন');
-    const p2 = await window.askPin('আবার পিন দিন', 'নিশ্চিত করার জন্য একই পিন আবার দিন');
-    if (p1 !== p2) { window.showToast('দুইবারের পিন মিলেনি, আবার চেষ্টা করুন', 'error'); return setTimeout(forceSetPin, 400); }
+    const p1 = await window.askPin('Set Security PIN', 'Create a 6-digit PIN');
+    const p2 = await window.askPin('Confirm PIN', 'Enter the same PIN again');
+    if (p1 !== p2) { window.showToast('Mismatch', 'error'); return setTimeout(forceSetPin, 400); }
     await window.callApi('/api/pin', { action:'set', pin:p1, accessToken: window.session.access_token });
-    await window.loadProfile();
-    window.showToast('পিন সেট হয়েছে! স্বাগতম।');
-    window.render();
-  } catch(e){ if (e.message !== 'cancelled') { window.showToast(e.message,'error'); setTimeout(forceSetPin, 400); } else setTimeout(forceSetPin, 300); }
+    await window.loadProfile(); window.showToast('PIN Set!'); window.render();
+  } catch(e){ setTimeout(forceSetPin, 400); }
 }
 
 window.changePin = async () => {
   try {
-    const oldPin = await window.askPin('পুরাতন পিন দিন');
-    const p1 = await window.askPin('নতুন পিন দিন');
-    const p2 = await window.askPin('আবার নতুন পিন দিন');
-    if (p1 !== p2) return window.showToast('নতুন পিন দুইবার মিলেনি', 'error');
-    await window.callApi('/api/pin', { action:'set', pin:p1, oldPin, accessToken: window.session.access_token });
-    window.showToast('পিন সফলভাবে পরিবর্তন হয়েছে!');
-  } catch(e){ if (e.message !== 'cancelled') window.showToast(e.message, 'error'); }
+    const oldPin = await window.askPin('Enter Old PIN');
+    const p1 = await window.askPin('Enter New PIN'); const p2 = await window.askPin('Confirm New PIN');
+    if (p1 !== p2) return window.showToast('Mismatch', 'error');
+    await window.callApi('/api/pin', { action:'set', pin:p1, oldPin, accessToken: window.session.access_token }); window.showToast('PIN Changed');
+  } catch(e){}
 };
 
 window.fullReset = async () => {
   try {
-    const pin1 = await window.askPin('পিন দিন (ধাপ ১/২)', 'সম্পূর্ণ হিস্ট্রি রিসেট নিশ্চিত করুন');
-    await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
-    const pin2 = await window.askPin('আবার পিন দিন (ধাপ ২/২)', 'এই কাজটি আর ফিরিয়ে আনা যাবে না');
-    await window.callApi('/api/pin', { action:'verify', pin: pin2, accessToken: window.session.access_token });
-    const { error } = await window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
-    if (error) throw error;
-    window.showToast('সম্পূর্ণ হিস্ট্রি রিসেট হয়েছে');
-    window.notify('full_reset', {});
-    await window.loadTxns();
-    window.changeTab('dashboard');
-  } catch(e){ if (e.message !== 'cancelled') window.showToast(e.message, 'error'); }
+    const pin1 = await window.askPin('Reset History (1/2)', 'Require PIN'); await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
+    const pin2 = await window.askPin('Are you sure? (2/2)', 'Require PIN again'); await window.callApi('/api/pin', { action:'verify', pin: pin2, accessToken: window.session.access_token });
+    await window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
+    window.showToast('History Wiped'); await window.loadTxns(); window.changeTab('dashboard');
+  } catch(e){}
 };
 
-/* ---------------- master key / admin ---------------- */
+/* ---------------- cropper (1:1 with zoom/pan) ---------------- */
+let cropState = { img: null, scale: 1, dx: 0, dy: 0, dragging: false, px: 0, py: 0, file: null };
+window.initCropper = (e) => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  if (file.size > 10*1024*1024) return window.showToast('Max size 10MB', 'error');
+  cropState.file = file; const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = document.getElementById('cropperImg'); cropState.img = img;
+    img.onload = () => {
+      const area = document.getElementById('cropperArea');
+      const boxSize = 280;
+      cropState.scale = Math.max(boxSize / img.naturalWidth, boxSize / img.naturalHeight);
+      const zoom = document.getElementById('cropZoom');
+      zoom.min = cropState.scale; zoom.max = cropState.scale * 3; zoom.step = 0.01; zoom.value = cropState.scale;
+      cropState.dx = (area.clientWidth - img.naturalWidth * cropState.scale) / 2;
+      cropState.dy = (area.clientHeight - img.naturalHeight * cropState.scale) / 2;
+      updateCropView();
+      document.getElementById('cropperModal').classList.remove('hidden');
+      document.getElementById('cropperModal').classList.add('flex');
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+function updateCropView(){ cropState.img.style.transform = `translate(${cropState.dx}px, ${cropState.dy}px) scale(${cropState.scale})`; }
+
+document.getElementById('cropZoom').addEventListener('input', e => {
+  const oldScale = cropState.scale; cropState.scale = parseFloat(e.target.value);
+  const area = document.getElementById('cropperArea');
+  const cx = area.clientWidth / 2; const cy = area.clientHeight / 2;
+  cropState.dx = cx - (cx - cropState.dx) * (cropState.scale / oldScale);
+  cropState.dy = cy - (cy - cropState.dy) * (cropState.scale / oldScale);
+  updateCropView();
+});
+const cArea = document.getElementById('cropperArea');
+cArea.addEventListener('pointerdown', e => { cropState.dragging = true; cropState.px = e.clientX; cropState.py = e.clientY; cArea.setPointerCapture(e.pointerId); });
+cArea.addEventListener('pointermove', e => {
+  if(!cropState.dragging) return;
+  cropState.dx += (e.clientX - cropState.px); cropState.dy += (e.clientY - cropState.py);
+  cropState.px = e.clientX; cropState.py = e.clientY; updateCropView();
+});
+cArea.addEventListener('pointerup', e => { cropState.dragging = false; cArea.releasePointerCapture(e.pointerId); });
+
+window.closeCropper = () => { document.getElementById('cropperModal').classList.add('hidden'); document.getElementById('cropperModal').classList.remove('flex'); };
+window.doCrop = () => {
+  const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
+  const area = document.getElementById('cropperArea');
+  const sX = ((area.clientWidth/2 - 140) - cropState.dx) / cropState.scale;
+  const sY = ((area.clientHeight/2 - 140) - cropState.dy) / cropState.scale;
+  const sW = 280 / cropState.scale; const sH = 280 / cropState.scale;
+  ctx.drawImage(cropState.img, sX, sY, sW, sH, 0, 0, 512, 512);
+  canvas.toBlob(async (blob) => {
+    window.closeCropper(); window.showToast('Uploading...', 'info');
+    try {
+      const path = `${window.session.user.id}/avatar_${Date.now()}.jpg`;
+      await window.supa.storage.from('avatars').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      const { data: pub } = window.supa.storage.from('avatars').getPublicUrl(path);
+      await window.supa.from('profiles').update({ avatar_url: pub.publicUrl }).eq('id', window.session.user.id);
+      await window.loadProfile(); window.render(); window.showToast('Avatar updated!');
+    } catch(err){ window.showToast(err.message, 'error'); }
+  }, 'image/jpeg', 0.9);
+};
+
+/* ---------------- admin/manage ---------------- */
 window.openMasterKeyModal = () => {
   window.showModal(`
-    <div class="text-center mb-6"><div class="w-14 h-14 bg-vIndigo/10 text-vIndigo rounded-full flex items-center justify-center mx-auto mb-3 border border-vIndigo/20"><i data-lucide="key-round" class="w-7 h-7"></i></div><h3 class="disp text-2xl font-bold">Master Key</h3><p class="text-xs text-slate-500 mt-2">সুপার এডমিন অ্যাক্সেসের জন্য মাস্টার-কী দিন</p></div>
+    <div class="text-center mb-6"><div class="w-14 h-14 bg-vIndigo/10 text-vIndigo rounded-full flex items-center justify-center mx-auto mb-3 border border-vIndigo/20"><i data-lucide="key-round" class="w-7 h-7"></i></div><h3 class="disp text-2xl font-bold">Master Key</h3></div>
     <input type="password" id="masterKeyInput" class="w-full p-4 rounded-2xl bg-slate-50 dark:bg-black/30 border text-lg text-center tracking-widest font-mono outline-none" placeholder="••••••••">
-    <div class="flex gap-3 mt-6"><button type="button" onclick="window.hideModal()" class="flex-1 py-4 text-sm bg-slate-200 dark:bg-slate-800 rounded-xl font-bold">বাতিল</button><button type="button" id="mk-ok" class="flex-1 py-4 text-sm bg-vIndigo text-white rounded-xl font-bold">Enter</button></div>
+    <div class="flex gap-3 mt-6"><button type="button" onclick="window.hideModal()" class="flex-1 py-4 text-sm bg-slate-200 dark:bg-slate-800 rounded-xl font-bold">Cancel</button><button type="button" id="mk-ok" class="flex-1 py-4 text-sm bg-vIndigo text-white rounded-xl font-bold">Enter</button></div>
   `);
   document.getElementById('mk-ok').onclick = async () => {
-    const btn = document.getElementById('mk-ok'); const og = btn.innerHTML; btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin mx-auto"></i>'; lucide.createIcons();
     try {
       const masterKey = document.getElementById('masterKeyInput').value;
       const json = await window.callApi('/api/master-verify', { masterKey, accessToken: window.session.access_token });
       window.adminToken = json.token; localStorage.setItem('vault_admin_token', json.token);
-      window.hideModal(); window.showToast('Master Access Granted'); window.changeTab('manage');
-    } catch(e){ window.showToast(e.message, 'error'); btn.innerHTML = og; }
+      window.hideModal(); window.changeTab('manage');
+    } catch(e){ window.showToast(e.message, 'error'); }
   };
 };
 
@@ -648,88 +623,47 @@ window._manageUsers = [];
 async function loadManageUsers(){
   try {
     const json = await fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action:'list_users' }) }).then(r=>r.json());
-    window._manageUsers = json.users || [];
-    window.render();
+    window._manageUsers = json.users || []; window.render();
   } catch(e){}
 }
-
 function buildManage(){
-  if (!window._manageUsers.length) { setTimeout(loadManageUsers, 50); }
+  if (!window._manageUsers.length) setTimeout(loadManageUsers, 50);
   return `
-  <h2 class="disp text-2xl font-bold mb-5 flex items-center gap-2"><i data-lucide="shield" class="w-6 h-6 text-vIndigo"></i> ম্যানেজ প্যানেল</h2>
+  <div class="flex items-center justify-between mb-5">
+    <h2 class="disp text-2xl font-bold flex items-center gap-2"><i data-lucide="shield" class="w-6 h-6 text-vIndigo"></i> Manage</h2>
+    <button onclick="window.exitAdmin()" class="text-[10px] bg-slate-200 dark:bg-slate-800 px-3 py-1.5 rounded-lg font-bold">${_t('exit_admin')}</button>
+  </div>
   <div class="space-y-4">
     ${window._manageUsers.map(u=>`
-      <div class="glass border rounded-3xl p-5 ${u.is_suspended?'border-vRose/40':''}">
+      <div class="glass border rounded-[28px] p-5 ${u.is_suspended?'border-vRose/40':''}">
         <div class="flex items-center gap-3 mb-3">
           <img src="${u.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(u.full_name||'U')}" class="w-11 h-11 rounded-full object-cover border">
           <div class="min-w-0 flex-1"><p class="font-bold text-sm truncate">${u.full_name||'—'}</p><p class="text-[10px] text-slate-500 mono truncate">${u.email}</p></div>
-          ${u.is_suspended ? `<span class="text-[9px] font-bold bg-vRose/10 text-vRose px-2 py-1 rounded-lg border border-vRose/20">SUSPENDED</span>` : ''}
         </div>
         <div class="grid grid-cols-3 gap-2 mb-3 text-center">
-          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">আয়</p><p class="font-bold text-vEmerald text-sm">৳${u.totalIncome}</p></div>
-          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">ব্যয়</p><p class="font-bold text-vRose text-sm">৳${u.totalExpense}</p></div>
-          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">ব্যালেন্স</p><p class="font-bold text-vGold text-sm">৳${u.balance}</p></div>
+          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">In</p><p class="font-bold text-vEmerald text-sm">৳${u.totalIncome}</p></div>
+          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">Out</p><p class="font-bold text-vRose text-sm">৳${u.totalExpense}</p></div>
+          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">Bal</p><p class="font-bold text-vGold text-sm">৳${u.balance}</p></div>
         </div>
-        <div class="flex gap-2">
-          <button type="button" onclick="window.sendFeedbackModal('${u.id}')" class="flex-1 py-2.5 bg-vIndigo/10 text-vIndigo border border-vIndigo/20 rounded-xl text-xs font-bold">ফিডব্যাক দিন</button>
-          ${u.is_suspended
-            ? `<button type="button" onclick="window.toggleSuspend('${u.id}', false)" class="flex-1 py-2.5 bg-vEmerald/10 text-vEmerald border border-vEmerald/20 rounded-xl text-xs font-bold">আনসাসপেন্ড</button>`
-            : `<button type="button" onclick="window.toggleSuspend('${u.id}', true)" class="flex-1 py-2.5 bg-vRose/10 text-vRose border border-vRose/20 rounded-xl text-xs font-bold">সাসপেন্ড</button>`}
-        </div>
-      </div>
-    `).join('') || `<div class="p-10 text-center text-slate-500 text-sm">লোড হচ্ছে...</div>`}
+      </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm">Loading...</div>`}
   </div>`;
 }
-
-window.toggleSuspend = async (id, suspend) => {
-  try {
-    await fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action: suspend?'suspend_user':'unsuspend_user', payload:{ id, reason: suspend?'নিয়ম লঙ্ঘন':null } }) });
-    window.showToast(suspend ? 'ইউজার সাসপেন্ড করা হয়েছে' : 'ইউজার আনসাসপেন্ড করা হয়েছে');
-    await loadManageUsers();
-  } catch(e){ window.showToast('এরর হয়েছে', 'error'); }
-};
-
-window.sendFeedbackModal = (userId) => {
-  window.showModal(`
-    <h3 class="disp text-xl font-bold mb-4">ফিডব্যাক পাঠান</h3>
-    <textarea id="fbMsg" rows="4" placeholder="মেসেজ লিখুন..." class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm outline-none"></textarea>
-    <div class="flex gap-3 mt-5"><button type="button" onclick="window.hideModal()" class="flex-1 py-3.5 bg-slate-200 dark:bg-slate-800 rounded-xl font-bold text-sm">বাতিল</button><button type="button" onclick="window.doSendFeedback('${userId}')" class="flex-1 py-3.5 bg-vIndigo text-white rounded-xl font-bold text-sm">পাঠান</button></div>
-  `);
-};
-window.doSendFeedback = async (userId) => {
-  const msg = document.getElementById('fbMsg').value;
-  if (!msg) return window.showToast('মেসেজ লিখুন', 'error');
-  try {
-    await fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action:'send_feedback', payload:{ user_id:userId, message:msg } }) });
-    window.hideModal(); window.showToast('ফিডব্যাক পাঠানো হয়েছে');
-  } catch(e){ window.showToast('এরর হয়েছে', 'error'); }
-};
 
 /* ---------------- boot ---------------- */
 async function boot(){
   try {
     window.CFG = await fetch('/api/config').then(r=>r.json());
     window.supa = createClient(window.CFG.supabaseUrl, window.CFG.supabaseAnonKey);
-
-    const { data: { session } } = await window.supa.auth.getSession();
-    window.session = session;
-
+    const { data: { session } } = await window.supa.auth.getSession(); window.session = session;
     window.supa.auth.onAuthStateChange(async (event, s) => {
       window.session = s;
-      if (s) { await window.loadProfile(); await window.loadTxns(); await window.loadFeedback(); if (event==='SIGNED_IN') window.notify('login', {}); }
+      if (s) { await window.loadProfile(); await window.loadTxns(); await window.loadFeedback(); }
       window.render();
     });
-
     if (window.session) { await window.loadProfile(); await window.loadTxns(); await window.loadFeedback(); }
     window.render();
     if (window.activeTab === 'add') setTimeout(()=>window.setEntryType('income'), 60);
-  } catch(e) {
-    document.getElementById('root').innerHTML = `<div class="flex-1 flex items-center justify-center text-center px-6"><p class="text-sm text-slate-500">লোড করতে সমস্যা হয়েছে। পেজ রিফ্রেশ করুন।</p></div>`;
-  } finally {
-    const boot = document.getElementById('boot');
-    boot.classList.add('boot-hide');
-    setTimeout(()=>boot.remove(), 400);
-  }
+  } catch(e) {} finally { const boot = document.getElementById('boot'); boot.classList.add('boot-hide'); setTimeout(()=>boot.remove(), 400); }
 }
 boot();
 </script>
