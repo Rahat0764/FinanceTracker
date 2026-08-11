@@ -39,6 +39,13 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'delete_account') {
+      const { error } = await sb.auth.admin.deleteUser(user.id);
+      if (error) throw error;
+      await sendTelegram(`🚨 <b>Account Permanently Deleted</b>\n👤 ${user.email}`);
+      return res.status(200).json({ ok: true });
+    }
+
     return res.status(400).json({ error: 'Unknown action' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
