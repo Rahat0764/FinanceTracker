@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="bn" class="dark">
+<html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Vault | ব্যক্তিগত ফান্ড ট্র্যাকার</title>
+<title>Vault | Fund Tracker</title>
 <meta name="theme-color" content="#060b09">
 <script>
   if (localStorage.getItem('vault_theme') === 'light') document.documentElement.classList.remove('dark');
@@ -12,29 +12,32 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script>
 tailwind.config = {
   darkMode: 'class',
   theme: { extend: {
-    fontFamily: { display: ['"Sora"','sans-serif'], body: ['"Hind Siliguri"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] },
+    fontFamily: { display: ['"Sora"','sans-serif'], body: ['"Inter"','sans-serif'], mono: ['"JetBrains Mono"','monospace'] },
     colors: { vBg:'#060b09', vCard:'#0e1712', vEmerald:'#12b76a', vRose:'#f2495c', vGold:'#f2b705', vIndigo:'#6366f1' }
   }}
 }
 </script>
 <style>
   * { -webkit-tap-highlight-color: transparent; }
-  html,body { background:#f6f9f7; min-height:100dvh; display:flex; flex-direction:column; transition: background .4s ease; }
-  html.dark, html.dark body { background:#060b09; }
-  body { font-family:'Hind Siliguri','Sora',sans-serif; }
+  html,body { background:#f1f5f9; min-height:100dvh; display:flex; flex-direction:column; transition: background .4s ease; }
+  html.dark, html.dark body { background:#0a0a0a; }
+  body { font-family:'Inter',sans-serif; }
   .disp { font-family:'Sora',sans-serif; letter-spacing:-0.01em; }
   .mono { font-family:'JetBrains Mono',monospace; }
   .hide-scrollbar::-webkit-scrollbar{display:none} .hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
   
-  /* Glassmorphism Styles */
-  .glass { background:rgba(255,255,255,0.7); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.6); box-shadow: 0 4px 30px rgba(0,0,0,0.05); }
-  .dark .glass { background:rgba(15,23,20,0.5); border:1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
+  /* Advanced Glassmorphism Styles */
+  .glass { background:rgba(255,255,255,0.65); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.7); box-shadow: 0 8px 32px rgba(0,0,0,0.04); }
+  .dark .glass { background:rgba(20,20,20,0.45); border:1px solid rgba(255,255,255,0.06); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
   
+  .glass-input { background:rgba(255,255,255,0.5); backdrop-filter:blur(12px); border:1px solid rgba(0,0,0,0.05); }
+  .dark .glass-input { background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.05); }
+
   .cut{ clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) }
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   .fade-in{animation:fadeIn .4s cubic-bezier(.16,1,.3,1) forwards} @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -44,7 +47,7 @@ tailwind.config = {
   ::selection{background:#12b76a;color:#04150c}
   .ring-track{stroke:rgba(255,255,255,.08)} .dark .ring-track{stroke:rgba(255,255,255,.08)} .ring-prog{stroke:#f2b705;stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.16,1,.3,1)}
   .key-btn{transition:transform .12s ease,background .12s ease} .key-btn:active{transform:scale(.92)}
-  .dot{width:12px;height:12px;border-radius:50%;background:rgba(100,100,100,.2);transition:all .2s ease}
+  .dot{width:12px;height:12px;border-radius:50%;background:rgba(0,0,0,.1);transition:all .2s ease}
   .dark .dot{background:rgba(255,255,255,.12)}
   .dot.filled{background:#12b76a;box-shadow:0 0 12px rgba(18,183,106,.6)}
 </style>
@@ -60,11 +63,16 @@ tailwind.config = {
   </div>
 </div>
 
-<div id="root" class="flex-1 flex flex-col w-full h-full relative"></div>
+<!-- Global Developer Credit Header -->
+<div class="fixed top-0 inset-x-0 z-[100] w-full bg-white/40 dark:bg-black/40 backdrop-blur-md border-b border-white/20 dark:border-white/5 py-1.5 flex justify-center items-center text-[10px] sm:text-[11px] font-semibold text-slate-500">
+  <span class="flex items-center gap-1.5">Developed by <span class="text-vEmerald font-bold">Rahat</span> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a></span>
+</div>
+
+<div id="root" class="flex-1 flex flex-col w-full h-full relative pt-[30px]"></div>
 
 <div id="modalContainer" class="fixed inset-0 bg-slate-900/60 dark:bg-black/80 z-[100] hidden flex justify-center items-center px-4 backdrop-blur-md overflow-y-auto py-8"></div>
 <div id="pinContainer" class="fixed inset-0 bg-slate-900/70 dark:bg-black/85 z-[150] hidden flex justify-center items-end backdrop-blur-md"></div>
-<div id="toast-container" class="fixed top-6 right-4 z-[300] flex flex-col gap-2 pointer-events-none"></div>
+<div id="toast-container" class="fixed top-8 right-4 z-[300] flex flex-col gap-2 pointer-events-none"></div>
 
 <!-- Cropper Modal -->
 <div id="cropperModal" class="fixed inset-0 bg-black/95 z-[999] hidden flex-col touch-none">
@@ -82,7 +90,7 @@ tailwind.config = {
       <i data-lucide="zoom-in" class="w-5 h-5 text-slate-400"></i>
     </div>
     <div class="flex gap-4">
-      <button onclick="window.closeCropper()" class="px-5 py-3.5 bg-slate-800 rounded-xl font-bold flex-1">Cancel</button>
+      <button onclick="window.closeCropper()" class="px-5 py-3.5 bg-slate-800 rounded-xl font-bold flex-1 text-white">Cancel</button>
       <button onclick="window.doCrop()" class="px-5 py-3.5 bg-vEmerald text-[#04150c] rounded-xl font-bold flex-1 shadow-lg">Save Profile</button>
     </div>
   </div>
@@ -92,7 +100,7 @@ tailwind.config = {
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/+esm';
 
 /* ---------------- i18n Dictionary ---------------- */
-window.lang = localStorage.getItem('vault_lang') || 'bn';
+window.lang = localStorage.getItem('vault_lang') || 'en';
 const LANG = {
   bn: {
     tagline: "আপনার ব্যক্তিগত আয়-ব্যয়ের সম্পূর্ণ গোপনীয় হিসাব। একদম নিরাপদ।",
@@ -106,7 +114,7 @@ const LANG = {
     history_title: "সম্পূর্ণ হিস্ট্রি", search: "খুঁজুন...", all: "সব", del: "মুছুন",
     sec_pin: "নিরাপত্তা পিন", change_pin: "পিন পরিবর্তন করুন",
     feedback: "ডেভেলপার ফিডব্যাক", dev_contact: "যোগাযোগ করুন",
-    danger: "বিপদজনক অঞ্চল", reset_all: "সম্পূর্ণ হিস্ট্রি রিসেট করুন",
+    danger: "বিপদজনক অঞ্চল", reset_all: "সম্পূর্ণ হিস্ট্রি রিসেট করুন", delete_account: "অ্যাকাউন্ট ও ডেটা ডিলিট করুন",
     logout: "লগআউট", lang_switch: "Switch to English", exit_admin: "অ্যাডমিন প্যানেল থেকে প্রস্থান",
     save_success: "এন্ট্রি সেভ হয়েছে!", req_fields: "পরিমাণ ও উৎস দিন"
   },
@@ -122,8 +130,8 @@ const LANG = {
     history_title: "Full History", search: "Search...", all: "All", del: "Delete",
     sec_pin: "Security PIN", change_pin: "Change PIN",
     feedback: "Developer Feedback", dev_contact: "Contact Developer",
-    danger: "Danger Zone", reset_all: "Reset Full History",
-    logout: "Logout", lang_switch: "বাংলায় পরিবর্তন করুন", exit_admin: "Exit Admin Mode",
+    danger: "Danger Zone", reset_all: "Reset Full History", delete_account: "Delete Account & Data",
+    logout: "Logout", lang_switch: "Switch to Bengali", exit_admin: "Exit Admin Mode",
     save_success: "Entry saved!", req_fields: "Amount and Source required"
   }
 };
@@ -152,7 +160,7 @@ window.showToast = (msg, type='success') => {
   const c = document.getElementById('toast-container');
   const t = document.createElement('div');
   const colors = type==='success' ? 'bg-vEmerald text-[#04150c]' : (type==='error' ? 'bg-vRose text-white' : 'bg-slate-800 text-white');
-  t.className = `toast-in flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl ${colors} text-sm font-bold max-w-xs border border-white/10`;
+  t.className = `toast-in flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl ${colors} text-sm font-bold max-w-xs border border-white/10`;
   t.innerHTML = `<i data-lucide="${type==='success'?'check-circle':'alert-circle'}" class="w-5 h-5 shrink-0"></i><span>${msg}</span>`;
   c.appendChild(t); lucide.createIcons();
   setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(20px)'; t.style.transition='all .3s'; setTimeout(()=>t.remove(),300); }, 3200);
@@ -160,34 +168,34 @@ window.showToast = (msg, type='success') => {
 
 window.showModal = (html) => {
   const mc = document.getElementById('modalContainer');
-  mc.innerHTML = `<div class="glass w-full max-w-md rounded-3xl p-6 border pop-in shadow-2xl relative my-auto max-h-[85vh] overflow-y-auto hide-scrollbar">${html}</div>`;
+  mc.innerHTML = `<div class="glass w-full max-w-sm rounded-3xl p-6 border pop-in shadow-2xl relative my-auto max-h-[85vh] overflow-y-auto hide-scrollbar">${html}</div>`;
   mc.classList.remove('hidden'); lucide.createIcons();
   mc.onclick = (e)=>{ if(e.target===mc) window.hideModal(); };
 };
 window.hideModal = () => document.getElementById('modalContainer').classList.add('hidden');
 
-/* ---------------- floating PIN keypad (Blink Fixed) ---------------- */
+/* ---------------- floating PIN keypad (Always English & Keyboard Support) ---------------- */
 let pinResolve, pinReject, pinEntered = '';
 window.askPin = (title, subtitle='') => {
   return new Promise((resolve, reject) => {
     pinResolve = resolve; pinReject = reject; pinEntered = '';
     const pc = document.getElementById('pinContainer');
     pc.innerHTML = `
-    <div class="w-full max-w-md glass rounded-t-[36px] border-t border-x p-6 pb-8 pop-in">
-      <div class="w-10 h-1.5 bg-slate-400/30 rounded-full mx-auto mb-5"></div>
+    <div class="w-full max-w-md glass rounded-t-[36px] border-t border-x border-white/20 p-6 pb-8 pop-in">
+      <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-6"></div>
       <div class="text-center mb-6">
-        <div class="w-12 h-12 bg-vGold/10 text-vGold rounded-2xl flex items-center justify-center mx-auto mb-3 border border-vGold/20"><i data-lucide="lock-keyhole" class="w-6 h-6"></i></div>
-        <h3 class="disp font-bold text-xl">${title}</h3>
-        ${subtitle ? `<p class="text-xs text-slate-500 mt-1">${subtitle}</p>` : ''}
+        <div class="w-14 h-14 bg-vGold/10 text-vGold rounded-full flex items-center justify-center mx-auto mb-3 border border-vGold/20"><i data-lucide="lock-keyhole" class="w-6 h-6"></i></div>
+        <h3 class="disp font-bold text-xl tracking-tight">${title}</h3>
+        ${subtitle ? `<p class="text-xs text-slate-500 mt-1.5">${subtitle}</p>` : ''}
       </div>
-      <div class="flex justify-center gap-3 mb-7" id="pinDots">
+      <div class="flex justify-center gap-3 mb-8" id="pinDots">
         ${[0,1,2,3,4,5].map(i=>`<div class="dot" id="dot-${i}"></div>`).join('')}
       </div>
-      <div class="grid grid-cols-3 gap-3 max-w-xs mx-auto">
-        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" class="key-btn py-4 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 disp text-xl font-bold" onclick="window.pinKey('${n}')">${bnNum(n)}</button>`).join('')}
-        <button type="button" class="key-btn py-4 rounded-2xl text-slate-400 font-bold text-xs" onclick="window.pinKey('cancel')">Cancel</button>
-        <button type="button" class="key-btn py-4 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 disp text-xl font-bold" onclick="window.pinKey('0')">${bnNum(0)}</button>
-        <button type="button" class="key-btn py-4 rounded-2xl text-vRose flex items-center justify-center" onclick="window.pinKey('back')"><i data-lucide="delete" class="w-5 h-5"></i></button>
+      <div class="grid grid-cols-3 gap-3 max-w-[260px] mx-auto">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" class="key-btn py-4 rounded-2xl bg-white/40 dark:bg-white/5 border border-white/50 dark:border-white/5 disp text-xl font-bold shadow-sm" onclick="window.pinKey('${n}')">${n}</button>`).join('')}
+        <button type="button" class="key-btn py-4 rounded-2xl text-slate-400 font-bold text-xs hover:text-slate-600 dark:hover:text-slate-200" onclick="window.pinKey('cancel')"><i data-lucide="x" class="w-6 h-6 mx-auto"></i></button>
+        <button type="button" class="key-btn py-4 rounded-2xl bg-white/40 dark:bg-white/5 border border-white/50 dark:border-white/5 disp text-xl font-bold shadow-sm" onclick="window.pinKey('0')">0</button>
+        <button type="button" class="key-btn py-4 rounded-2xl text-vRose flex items-center justify-center hover:bg-vRose/10 transition-colors" onclick="window.pinKey('back')"><i data-lucide="delete" class="w-6 h-6"></i></button>
       </div>
     </div>`;
     pc.classList.remove('hidden'); lucide.createIcons();
@@ -207,6 +215,14 @@ window.pinKey = (k) => {
     setTimeout(() => { document.getElementById('pinContainer').classList.add('hidden'); pinResolve(pinEntered); }, 150); 
   }
 };
+
+window.handlePinKeydown = (e) => {
+  if (document.getElementById('pinContainer').classList.contains('hidden')) return;
+  if (e.key >= '0' && e.key <= '9') { window.pinKey(e.key); }
+  else if (e.key === 'Backspace') { window.pinKey('back'); }
+  else if (e.key === 'Escape') { window.pinKey('cancel'); }
+};
+document.addEventListener('keydown', window.handlePinKeydown);
 
 /* ---------------- API helper ---------------- */
 window.callApi = async (path, body) => {
@@ -240,30 +256,26 @@ window.render = () => {
 /* ---------------- landing (logged out) ---------------- */
 function buildLanding(){
   return `
-  <div class="fixed top-6 inset-x-0 flex flex-col items-center justify-center text-[11px] text-slate-500 font-semibold z-50">
-    <p>Developed by <a href="https://linkedin.com/in/RahatAhmedX" target="_blank" class="text-vEmerald font-bold hover:underline">Rahat</a></p>
-    <a href="https://github.com/Rahat0764" target="_blank" class="mt-1 flex items-center gap-1.5 hover:text-vEmerald"><i data-lucide="github" class="w-3.5 h-3.5"></i> GitHub</a>
-  </div>
-  <div class="flex-1 flex flex-col items-center justify-center px-6 text-center py-10 w-full max-w-md mx-auto">
-    <div class="glass p-8 md:p-10 rounded-[40px] w-full flex flex-col items-center shadow-2xl relative">
-      <div class="w-20 h-20 rounded-[28px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-6 absolute -top-10 border-4 border-white dark:border-[#060b09]"><i data-lucide="vault" class="w-10 h-10 text-[#04150c]"></i></div>
-      <h1 class="disp text-4xl font-extrabold mb-3 mt-6">Vault</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed px-2">${_t('tagline')}</p>
-      <button type="button" onclick="window.loginGoogle()" class="w-full flex items-center justify-center gap-3 bg-white text-slate-800 px-6 py-4 rounded-2xl font-bold shadow-lg shadow-black/5 active:scale-95 transition-all border border-slate-200">
+  <div class="flex-1 flex flex-col items-center justify-center px-6 text-center py-10 w-full max-w-md mx-auto fade-in">
+    <div class="glass p-8 md:p-10 rounded-[36px] w-full flex flex-col items-center relative">
+      <div class="w-20 h-20 rounded-[28px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-6 absolute -top-10 border-[3px] border-white dark:border-[#141414]"><i data-lucide="vault" class="w-10 h-10 text-[#04150c]"></i></div>
+      <h1 class="disp text-4xl font-extrabold mb-3 mt-8">Vault</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed px-2 font-medium">${_t('tagline')}</p>
+      <button type="button" onclick="window.loginGoogle()" class="w-full flex items-center justify-center gap-3 bg-white dark:bg-white text-slate-800 px-6 py-4 rounded-2xl font-bold shadow-lg shadow-black/5 active:scale-95 transition-all border border-slate-200">
         <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
         ${_t('login_btn')}
       </button>
-      <p class="text-[10px] text-slate-400 mt-5">${_t('auto_save')}</p>
+      <p class="text-[10px] text-slate-400 mt-5 font-medium">${_t('auto_save')}</p>
     </div>
   </div>`;
 }
 
 function buildSuspended(){
-  return `<div class="flex-1 flex flex-col items-center justify-center px-6 text-center">
-    <div class="w-16 h-16 rounded-3xl bg-vRose/10 text-vRose flex items-center justify-center mb-5 border border-vRose/20"><i data-lucide="shield-off" class="w-8 h-8"></i></div>
+  return `<div class="flex-1 flex flex-col items-center justify-center px-6 text-center fade-in">
+    <div class="w-16 h-16 rounded-full bg-vRose/10 text-vRose flex items-center justify-center mb-5 border border-vRose/20"><i data-lucide="shield-off" class="w-8 h-8"></i></div>
     <h2 class="disp text-2xl font-bold mb-2">Account Suspended</h2>
-    <p class="text-sm text-slate-500 max-w-xs mb-6">${window.profile.suspend_reason || 'Violation of terms.'}</p>
-    <button type="button" onclick="window.logout()" class="py-3.5 px-8 bg-slate-200 dark:bg-slate-800 rounded-2xl font-bold">Logout</button>
+    <p class="text-sm text-slate-500 max-w-xs mb-8">${window.profile.suspend_reason || 'Violation of terms.'}</p>
+    <button type="button" onclick="window.logout()" class="py-3.5 px-8 glass-input rounded-2xl font-bold shadow-sm">Logout</button>
   </div>`;
 }
 
@@ -271,32 +283,32 @@ function buildSuspended(){
 function buildShell(innerHtml){
   const p = window.profile || {}; const isSuper = window.adminToken;
   return `
-  <header class="glass sticky top-0 z-40 border-b px-4 py-3 shadow-sm">
-    <div class="max-w-3xl mx-auto flex justify-between items-center gap-2">
+  <header class="glass sticky top-[30px] z-40 border-b shadow-sm">
+    <div class="max-w-3xl mx-auto flex justify-between items-center gap-2 px-4 py-3">
       <div class="flex items-center gap-3 cursor-pointer select-none" onclick="window.handleLogoTap()">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-lg"><i data-lucide="vault" class="w-5 h-5 text-[#04150c]"></i></div>
-        <div><h1 class="disp text-lg font-bold leading-none">Vault</h1><p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Fund Tracker</p></div>
+        <div><h1 class="disp text-lg font-bold leading-none tracking-tight">Vault</h1><p class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Fund Tracker</p></div>
       </div>
       <div class="flex items-center gap-4">
-        <button type="button" onclick="window.toggleTheme()" class="relative w-14 h-7 bg-slate-300 dark:bg-slate-700 rounded-full flex items-center px-1 cursor-pointer transition-colors border border-slate-300 dark:border-slate-600 shadow-inner" id="themeBtn">
-          <i data-lucide="moon" class="absolute right-2 w-3.5 h-3.5 text-slate-400"></i>
-          <i data-lucide="sun" class="absolute left-2 w-3.5 h-3.5 text-amber-500"></i>
-          <div id="themeSlider" class="w-5 h-5 bg-white rounded-full shadow z-10 transform transition-transform duration-300"></div>
+        <button type="button" onclick="window.toggleTheme()" class="relative w-14 h-7 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center px-1 cursor-pointer transition-colors border border-slate-300 dark:border-slate-600 shadow-inner" id="themeBtn">
+          <i data-lucide="moon" class="absolute right-1.5 w-4 h-4 text-slate-400"></i>
+          <i data-lucide="sun" class="absolute left-1.5 w-4 h-4 text-amber-500"></i>
+          <div id="themeSlider" class="w-5 h-5 bg-white rounded-full shadow-md z-10 transform transition-transform duration-300"></div>
         </button>
-        <img src="${p.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(p.full_name||'U')}" class="w-9 h-9 rounded-full object-cover border-2 border-vEmerald/40 cursor-pointer" onclick="window.changeTab('profile')">
+        <img src="${p.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(p.full_name||'U')}" class="w-9 h-9 rounded-full object-cover border-2 border-vEmerald/40 cursor-pointer shadow-sm" onclick="window.changeTab('profile')">
       </div>
     </div>
   </header>
 
-  <main class="flex-1 w-full max-w-2xl mx-auto pb-28 pt-5 px-4 md:px-6 fade-in">${innerHtml}</main>
+  <main class="flex-1 w-full max-w-2xl mx-auto pb-28 pt-6 px-4 md:px-6 fade-in">${innerHtml}</main>
 
-  <nav class="fixed bottom-4 inset-x-0 mx-auto w-[92%] max-w-md glass z-40 rounded-2xl border shadow-2xl">
-    <div class="flex justify-around items-center h-16 px-1">
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('dashboard')" data-tab="dashboard"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('dashboard')}</span></button>
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('add')" data-tab="add"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('add')}</span></button>
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('history')" data-tab="history"><i data-lucide="history" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('history')}</span></button>
-      ${isSuper ? `<button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('manage')" data-tab="manage"><i data-lucide="shield" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('manage')}</span></button>` : ''}
-      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1" onclick="window.changeTab('profile')" data-tab="profile"><i data-lucide="user-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('profile')}</span></button>
+  <nav class="fixed bottom-5 inset-x-0 mx-auto w-[92%] max-w-md glass z-40 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+    <div class="flex justify-around items-center h-[68px] px-2">
+      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('dashboard')" data-tab="dashboard"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('dashboard')}</span></button>
+      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('add')" data-tab="add"><i data-lucide="plus-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('add')}</span></button>
+      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('history')" data-tab="history"><i data-lucide="history" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('history')}</span></button>
+      ${isSuper ? `<button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('manage')" data-tab="manage"><i data-lucide="shield" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('manage')}</span></button>` : ''}
+      <button class="nav-btn flex flex-col items-center gap-1 flex-1 py-1 transition-colors" onclick="window.changeTab('profile')" data-tab="profile"><i data-lucide="user-circle" class="w-5 h-5"></i><span class="text-[9px] disp font-bold uppercase tracking-wider">${_t('profile')}</span></button>
     </div>
   </nav>`;
 }
@@ -309,7 +321,7 @@ window.handleLogoTap = () => {
 function updateNav(){
   document.querySelectorAll('.nav-btn').forEach(b=>{
     const on = b.dataset.tab === window.activeTab;
-    b.classList.toggle('text-vEmerald', on); b.classList.toggle('text-slate-500', !on);
+    b.classList.toggle('text-vEmerald', on); b.classList.toggle('text-slate-400', !on);
   });
   const htmlDark = document.documentElement.classList.contains('dark');
   document.getElementById('themeSlider')?.classList.toggle('translate-x-[26px]', htmlDark);
@@ -337,18 +349,18 @@ function buildDashboard(){
   const r = 42, circ = 2*Math.PI*r; const offset = circ * (1 - pct);
   
   return `
-  <div class="cut glass border p-6 md:p-8 relative overflow-hidden mb-6">
+  <div class="cut glass p-6 md:p-8 relative overflow-hidden mb-6 shadow-sm">
     <div class="flex justify-between items-center gap-6">
       <div>
-        <p class="text-vEmerald font-bold text-[10px] uppercase tracking-[0.2em] mb-1 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-vEmerald animate-pulse"></span> ${window.lang==='en'?EN_DAYS[now.getDay()]:BN_DAYS[now.getDay()]}</p>
-        <h2 class="disp text-2xl md:text-3xl font-bold mb-1">${formatDate(now)}</h2>
-        <p class="text-sm text-slate-500 font-semibold">${_t('welcome')}, ${window.profile.full_name.split(' ')[0]}</p>
+        <p class="text-vEmerald font-bold text-[10px] uppercase tracking-[0.2em] mb-1.5 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-vEmerald animate-pulse shadow-[0_0_8px_#12b76a]"></span> ${window.lang==='en'?EN_DAYS[now.getDay()]:BN_DAYS[now.getDay()]}</p>
+        <h2 class="disp text-[26px] md:text-3xl font-extrabold mb-1 tracking-tight">${formatDate(now)}</h2>
+        <p class="text-[13px] text-slate-500 font-medium">${_t('welcome')}, ${window.profile.full_name.split(' ')[0]}</p>
       </div>
-      <svg width="100" height="100" viewBox="0 0 100 100" class="-rotate-90 shrink-0">
+      <svg width="100" height="100" viewBox="0 0 100 100" class="-rotate-90 shrink-0 drop-shadow-md">
         <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-track"></circle>
         <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-prog" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"></circle>
         <text x="50" y="46" text-anchor="middle" fill="currentColor" font-size="22" font-weight="800" transform="rotate(90 50 50)" font-family="Sora">${bnNum(left)}</text>
-        <text x="50" y="63" text-anchor="middle" fill="currentColor" opacity="0.5" font-size="9" transform="rotate(90 50 50)">${_t('days_left')}</text>
+        <text x="50" y="63" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9" transform="rotate(90 50 50)">${_t('days_left')}</text>
       </svg>
     </div>
   </div>
@@ -356,40 +368,40 @@ function buildDashboard(){
   <div class="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
     ${statCard(_t('total_in'), '৳ '+bnNum(income), 'arrow-down-circle', 'from-vEmerald to-emerald-700', ()=>window.changeTab('add'))}
     ${statCard(_t('total_out'), '৳ '+bnNum(expense), 'arrow-up-circle', 'from-vRose to-rose-700', ()=>window.changeTab('add'))}
-    <div class="col-span-2 md:col-span-1 cut bg-gradient-to-br from-vGold to-amber-600 p-5 relative overflow-hidden shadow-lg border border-white/10 cursor-pointer" onclick="window.changeTab('history')">
+    <div class="col-span-2 md:col-span-1 cut bg-gradient-to-br from-vGold to-amber-600 p-5 relative overflow-hidden shadow-md border border-white/20 cursor-pointer transition-transform active:scale-[0.98]" onclick="window.changeTab('history')">
       <i data-lucide="wallet" class="absolute -right-3 -bottom-3 w-24 h-24 text-white/20"></i>
-      <span class="text-[10px] font-bold uppercase tracking-widest text-white/90 block mb-1">${_t('balance')}</span>
-      <h3 class="text-2xl md:text-3xl font-bold disp text-white relative z-10">৳ ${bnNum(balance)}</h3>
+      <span class="text-[10px] font-bold uppercase tracking-widest text-white/90 block mb-1 drop-shadow-sm">${_t('balance')}</span>
+      <h3 class="text-2xl md:text-3xl font-extrabold disp text-white relative z-10 drop-shadow-sm tracking-tight">৳ ${bnNum(balance)}</h3>
     </div>
   </div>
 
-  <div class="glass border rounded-[28px] overflow-hidden shadow-sm">
-    <div class="p-4 border-b flex items-center justify-between">
-      <div class="flex items-center gap-2"><i data-lucide="clock" class="w-4 h-4 text-vEmerald"></i><h3 class="font-bold disp tracking-wide">${_t('recent')}</h3></div>
-      <button type="button" onclick="window.changeTab('history')" class="text-[11px] font-bold text-vEmerald">${_t('see_all')}</button>
+  <div class="glass rounded-[24px] overflow-hidden shadow-sm">
+    <div class="p-4 border-b border-white/20 dark:border-white/5 flex items-center justify-between bg-white/20 dark:bg-black/20">
+      <div class="flex items-center gap-2"><i data-lucide="clock" class="w-4 h-4 text-vEmerald"></i><h3 class="font-bold disp text-sm">${_t('recent')}</h3></div>
+      <button type="button" onclick="window.changeTab('history')" class="text-[11px] font-bold text-vEmerald hover:underline">${_t('see_all')}</button>
     </div>
-    <div class="divide-y divide-slate-100 dark:divide-white/5">
+    <div class="divide-y divide-slate-100/50 dark:divide-white/5">
       ${window.txns.slice(0,5).map(txnRow).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`}
     </div>
   </div>`;
 }
 
 function statCard(label, value, icon, grad, onClick){
-  return `<div onclick="(${onClick.toString()})()" class="cut bg-gradient-to-br ${grad} p-5 relative overflow-hidden shadow-lg border border-white/10 cursor-pointer">
+  return `<div onclick="(${onClick.toString()})()" class="cut bg-gradient-to-br ${grad} p-5 relative overflow-hidden shadow-md border border-white/20 cursor-pointer transition-transform active:scale-[0.98]">
     <i data-lucide="${icon}" class="absolute -right-3 -bottom-3 w-24 h-24 text-white/20"></i>
-    <span class="text-[10px] font-bold uppercase tracking-widest text-white/90 block mb-1">${label}</span>
-    <h3 class="text-2xl font-bold disp text-white relative z-10">${value}</h3>
+    <span class="text-[10px] font-bold uppercase tracking-widest text-white/90 block mb-1 drop-shadow-sm">${label}</span>
+    <h3 class="text-[22px] font-extrabold disp text-white relative z-10 drop-shadow-sm tracking-tight">${value}</h3>
   </div>`;
 }
 function txnRow(t){
   const isIncome = t.type === 'income'; const d = new Date(t.txn_date);
-  return `<div class="p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-    <div class="w-10 h-10 rounded-2xl ${isIncome?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0"><i data-lucide="${isIncome?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
+  return `<div class="p-4 flex items-center gap-3 hover:bg-white/40 dark:hover:bg-white/5 transition-colors">
+    <div class="w-10 h-10 rounded-2xl ${isIncome?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0 shadow-sm"><i data-lucide="${isIncome?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
     <div class="min-w-0 flex-1">
-      <p class="text-sm font-bold truncate">${t.category}</p>
-      <p class="text-[10px] text-slate-500 font-semibold mono">#${t.ref_id} &bull; ${formatDate(d)}</p>
+      <p class="text-[13px] font-bold truncate">${t.category}</p>
+      <p class="text-[10px] text-slate-500 font-medium mono mt-0.5">#${t.ref_id} &bull; ${formatDate(d)}</p>
     </div>
-    <span class="font-bold disp ${isIncome?'text-vEmerald':'text-vRose'}">${isIncome?'+':'-'}৳ ${bnNum(t.amount)}</span>
+    <span class="font-bold disp tracking-tight text-sm ${isIncome?'text-vEmerald':'text-vRose'}">${isIncome?'+':'-'}৳ ${bnNum(t.amount)}</span>
   </div>`;
 }
 
@@ -397,37 +409,43 @@ function txnRow(t){
 window._entryType = 'income';
 function buildAdd(){
   return `
-  <h2 class="disp text-2xl font-bold mb-5 flex items-center gap-2"><i data-lucide="plus-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('new_entry')}</h2>
-  <div class="glass border rounded-[28px] p-5 md:p-6 shadow-sm">
+  <h2 class="disp text-2xl font-extrabold mb-5 flex items-center gap-2 tracking-tight"><i data-lucide="plus-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('new_entry')}</h2>
+  <div class="glass rounded-[28px] p-5 md:p-7 shadow-sm">
     <div class="space-y-4">
       <div>
         <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('amount_label')}</label>
-        <div class="relative"><span class="absolute left-4 top-4 font-bold text-slate-400">৳</span><input id="entryAmount" type="number" placeholder="0.00" class="w-full pl-10 pr-4 py-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-xl font-bold outline-none mono focus:border-vEmerald transition-colors"></div>
+        <div class="relative">
+          <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">৳</span>
+          <input id="entryAmount" type="number" placeholder="0.00" class="w-full pl-10 pr-4 py-3 rounded-2xl glass-input text-base font-bold outline-none focus:border-vEmerald focus:ring-1 focus:ring-vEmerald/50 transition-all shadow-inner">
+        </div>
       </div>
-      <div class="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-black/40 p-1.5 rounded-2xl">
-        <button type="button" id="typeIncomeBtn" onclick="window.setEntryType('income')" class="py-3 rounded-xl font-bold text-sm transition-all shadow-md bg-vEmerald text-[#04150c]">${_t('income')}</button>
-        <button type="button" id="typeExpenseBtn" onclick="window.setEntryType('expense')" class="py-3 rounded-xl font-bold text-sm transition-all text-slate-500">${_t('expense')}</button>
+      <div class="flex gap-2 bg-slate-200/60 dark:bg-black/40 p-1 rounded-2xl shadow-inner">
+        <button type="button" id="typeIncomeBtn" onclick="window.setEntryType('income')" class="flex-1 py-2.5 rounded-xl font-bold text-[13px] transition-all shadow-sm bg-vEmerald text-[#04150c]">${_t('income')}</button>
+        <button type="button" id="typeExpenseBtn" onclick="window.setEntryType('expense')" class="flex-1 py-2.5 rounded-xl font-bold text-[13px] transition-all text-slate-500">${_t('expense')}</button>
       </div>
-      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('where_label')} *</label>
-        <input id="entrySource" placeholder="..." class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm font-bold outline-none focus:border-vEmerald transition-colors">
+      <div>
+        <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('where_label')} *</label>
+        <input id="entrySource" placeholder="..." class="w-full px-4 py-3 rounded-2xl glass-input text-[13px] font-medium outline-none focus:border-vEmerald focus:ring-1 focus:ring-vEmerald/50 transition-all shadow-inner">
       </div>
-      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('note_label')}</label>
-        <textarea id="entryNote" rows="2" class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm outline-none focus:border-vEmerald transition-colors"></textarea>
+      <div>
+        <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('note_label')}</label>
+        <textarea id="entryNote" rows="2" class="w-full px-4 py-3 rounded-2xl glass-input text-[13px] font-medium outline-none focus:border-vEmerald focus:ring-1 focus:ring-vEmerald/50 transition-all shadow-inner"></textarea>
       </div>
-      <div><label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('date_label')}</label>
-        <input id="entryDate" type="date" value="${new Date().toISOString().split('T')[0]}" class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border text-sm font-bold outline-none">
+      <div>
+        <label class="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">${_t('date_label')}</label>
+        <input id="entryDate" type="date" value="${new Date().toISOString().split('T')[0]}" class="w-full px-4 py-3 rounded-2xl glass-input text-[13px] font-medium outline-none focus:border-vEmerald focus:ring-1 focus:ring-vEmerald/50 transition-all shadow-inner">
       </div>
-      <button type="button" id="entrySaveBtn" onclick="window.submitEntry()" class="w-full mt-2 py-4 rounded-xl bg-vEmerald text-[#04150c] font-bold shadow-lg shadow-vEmerald/30 active:scale-95 transition-all disp tracking-wide text-lg flex items-center justify-center gap-2"><i data-lucide="check" class="w-5 h-5"></i> ${_t('save')}</button>
+      <button type="button" id="entrySaveBtn" onclick="window.submitEntry()" class="w-full mt-2 py-3.5 rounded-2xl bg-vEmerald text-[#04150c] font-bold shadow-lg shadow-vEmerald/30 active:scale-[0.98] transition-all disp tracking-wide text-[15px] flex items-center justify-center gap-2"><i data-lucide="check" class="w-5 h-5"></i> ${_t('save')}</button>
     </div>
   </div>`;
 }
 
 window.setEntryType = (type) => {
   window._entryType = type;
-  document.getElementById('typeIncomeBtn').className = `py-3 rounded-xl font-bold text-sm transition-all ${type==='income'?'bg-vEmerald text-[#04150c] shadow-md':'text-slate-500'}`;
-  document.getElementById('typeExpenseBtn').className = `py-3 rounded-xl font-bold text-sm transition-all ${type==='expense'?'bg-vRose text-white shadow-md':'text-slate-500'}`;
+  document.getElementById('typeIncomeBtn').className = `flex-1 py-2.5 rounded-xl font-bold text-[13px] transition-all ${type==='income'?'bg-vEmerald text-[#04150c] shadow-sm':'text-slate-500'}`;
+  document.getElementById('typeExpenseBtn').className = `flex-1 py-2.5 rounded-xl font-bold text-[13px] transition-all ${type==='expense'?'bg-vRose text-white shadow-sm':'text-slate-500'}`;
   const saveBtn = document.getElementById('entrySaveBtn');
-  saveBtn.className = `w-full mt-2 py-4 rounded-xl ${type==='income'?'bg-vEmerald text-[#04150c] shadow-vEmerald/30':'bg-vRose text-white shadow-vRose/30'} font-bold shadow-lg active:scale-95 transition-all disp tracking-wide text-lg flex items-center justify-center gap-2`;
+  saveBtn.className = `w-full mt-2 py-3.5 rounded-2xl ${type==='income'?'bg-vEmerald text-[#04150c] shadow-vEmerald/30':'bg-vRose text-white shadow-vRose/30'} font-bold shadow-lg active:scale-[0.98] transition-all disp tracking-wide text-[15px] flex items-center justify-center gap-2`;
 };
 
 window.submitEntry = async () => {
@@ -450,26 +468,26 @@ function buildHistory(){
   let list = window.txns.filter(t => window._historyFilter==='all' || t.type===window._historyFilter);
   if (window._historySearch) { const q = window._historySearch.toLowerCase(); list = list.filter(t => (t.category+' '+t.ref_id+' '+(t.note||'')).toLowerCase().includes(q)); }
   return `
-  <h2 class="disp text-2xl font-bold mb-4 flex items-center gap-2"><i data-lucide="history" class="w-6 h-6 text-vEmerald"></i> ${_t('history_title')}</h2>
+  <h2 class="disp text-2xl font-extrabold mb-4 flex items-center gap-2 tracking-tight"><i data-lucide="history" class="w-6 h-6 text-vEmerald"></i> ${_t('history_title')}</h2>
   <div class="flex gap-2 mb-4">
-    ${['all','income','expense'].map(f=> `<button type="button" onclick="window._historyFilter='${f}'; window.render();" class="px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${window._historyFilter===f?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-transparent border-slate-200 dark:border-white/10 text-slate-500'}">${f==='all'?_t('all'):(f==='income'?_t('income'):_t('expense'))}</button>`).join('')}
+    ${['all','income','expense'].map(f=> `<button type="button" onclick="window._historyFilter='${f}'; window.render();" class="px-4 py-2 rounded-xl text-[11px] font-bold border transition-colors ${window._historyFilter===f?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">${f==='all'?_t('all'):(f==='income'?_t('income'):_t('expense'))}</button>`).join('')}
     <div class="relative flex-1">
       <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
-      <input oninput="window._historySearch=this.value; window.render();" value="${window._historySearch}" placeholder="${_t('search')}" class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border text-xs font-bold outline-none">
+      <input oninput="window._historySearch=this.value; window.render();" value="${window._historySearch}" placeholder="${_t('search')}" class="w-full pl-9 pr-3 py-2 rounded-xl glass-input text-xs font-medium outline-none focus:border-vEmerald transition-colors shadow-inner">
     </div>
   </div>
-  <div class="glass border rounded-[28px] overflow-hidden shadow-sm">
-    <div class="divide-y divide-slate-100 dark:divide-white/5">
+  <div class="glass rounded-[24px] overflow-hidden shadow-sm">
+    <div class="divide-y divide-slate-100/50 dark:divide-white/5">
       ${list.map(t=> `<div class="p-4 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-2xl ${t.type==='income'?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0"><i data-lucide="${t.type==='income'?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
+        <div class="w-10 h-10 rounded-2xl ${t.type==='income'?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0 shadow-sm"><i data-lucide="${t.type==='income'?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-bold truncate">${t.category}</p>
-          <p class="text-[10px] text-slate-500 font-semibold mono">#${t.ref_id} &bull; ${formatDate(new Date(t.txn_date))}</p>
-          ${t.note ? `<p class="text-[11px] text-slate-500 mt-1 truncate">${t.note}</p>` : ''}
+          <p class="text-[13px] font-bold truncate">${t.category}</p>
+          <p class="text-[10px] text-slate-500 font-medium mono mt-0.5">#${t.ref_id} &bull; ${formatDate(new Date(t.txn_date))}</p>
+          ${t.note ? `<p class="text-[11px] text-slate-500 mt-1 truncate font-medium">${t.note}</p>` : ''}
         </div>
         <div class="text-right shrink-0">
-          <span class="font-bold disp block ${t.type==='income'?'text-vEmerald':'text-vRose'}">${t.type==='income'?'+':'-'}৳ ${bnNum(t.amount)}</span>
-          <button type="button" onclick="window.deleteTxn('${t.id}')" class="text-[10px] text-slate-400 hover:text-vRose font-bold mt-1">${_t('del')}</button>
+          <span class="font-bold disp block tracking-tight text-sm ${t.type==='income'?'text-vEmerald':'text-vRose'}">${t.type==='income'?'+':'-'}৳ ${bnNum(t.amount)}</span>
+          <button type="button" onclick="window.deleteTxn('${t.id}')" class="text-[10px] text-slate-400 hover:text-vRose font-bold mt-1.5 transition-colors">${_t('del')}</button>
         </div>
       </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`}
     </div>
@@ -488,25 +506,32 @@ window.deleteTxn = async (id) => {
 function buildProfile(){
   const p = window.profile;
   return `
-  <h2 class="disp text-2xl font-bold mb-5 flex items-center gap-2"><i data-lucide="user-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('profile')}</h2>
-  <div class="glass border rounded-[28px] p-6 mb-5 text-center shadow-sm">
+  <h2 class="disp text-2xl font-extrabold mb-5 flex items-center gap-2 tracking-tight"><i data-lucide="user-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('profile')}</h2>
+  <div class="glass rounded-[28px] p-6 mb-5 text-center shadow-sm">
     <div class="relative w-24 h-24 mx-auto mb-3">
-      <img src="${p.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(p.full_name||'U')}" class="w-24 h-24 rounded-full object-cover border-4 border-vEmerald/30">
-      <button type="button" onclick="document.getElementById('avatarInput').click()" class="absolute bottom-0 right-0 w-8 h-8 bg-vEmerald text-[#04150c] rounded-full flex items-center justify-center border-2 border-white dark:border-[#060b09] shadow-lg"><i data-lucide="camera" class="w-4 h-4"></i></button>
+      <img src="${p.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(p.full_name||'U')}" class="w-24 h-24 rounded-full object-cover border-4 border-vEmerald/30 shadow-md">
+      <button type="button" onclick="document.getElementById('avatarInput').click()" class="absolute bottom-0 right-0 w-8 h-8 bg-vEmerald text-[#04150c] rounded-full flex items-center justify-center border-2 border-white dark:border-[#0a0a0a] shadow-lg active:scale-95 transition-transform"><i data-lucide="camera" class="w-4 h-4"></i></button>
       <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="window.initCropper(event)">
     </div>
-    <h3 class="disp text-xl font-bold">${p.full_name || 'User'}</h3>
-    <p class="text-xs text-slate-500 font-semibold">${p.email}</p>
+    <h3 class="disp text-xl font-bold tracking-tight">${p.full_name || 'User'}</h3>
+    <p class="text-xs text-slate-500 font-medium mt-0.5">${p.email}</p>
   </div>
-  <div class="glass border rounded-[28px] p-5 mb-5 space-y-3">
-    <button type="button" onclick="window.lang=window.lang==='bn'?'en':'bn'; localStorage.setItem('vault_lang',window.lang); window.render();" class="w-full py-3.5 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><i data-lucide="languages" class="w-4 h-4 text-vIndigo"></i> ${_t('lang_switch')}</button>
-    <button type="button" onclick="window.changePin()" class="w-full py-3.5 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><i data-lucide="key-round" class="w-4 h-4 text-vGold"></i> ${_t('change_pin')}</button>
+  
+  <div class="glass rounded-[28px] p-5 mb-5 space-y-3 shadow-sm">
+    <button type="button" onclick="window.lang=window.lang==='bn'?'en':'bn'; localStorage.setItem('vault_lang',window.lang); window.render();" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="languages" class="w-4 h-4 text-vIndigo"></i> ${_t('lang_switch')}</button>
+    <button type="button" onclick="window.changePin()" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="key-round" class="w-4 h-4 text-vGold"></i> ${_t('change_pin')}</button>
   </div>
-  <div class="glass border border-vRose/20 rounded-[28px] p-5 mb-6">
-    <h3 class="font-bold disp mb-3 text-vRose flex items-center gap-2"><i data-lucide="alert-triangle" class="w-4 h-4"></i> ${_t('danger')}</h3>
-    <button type="button" onclick="window.fullReset()" class="w-full py-3.5 bg-vRose/10 text-vRose border border-vRose/30 rounded-xl font-bold text-sm">${_t('reset_all')}</button>
+  
+  <div class="glass border border-vRose/20 rounded-[28px] p-5 mb-6 shadow-sm relative overflow-hidden">
+    <div class="absolute inset-0 bg-vRose/5 pointer-events-none"></div>
+    <h3 class="font-bold disp mb-3 text-vRose flex items-center gap-2 relative z-10"><i data-lucide="alert-triangle" class="w-4 h-4"></i> ${_t('danger')}</h3>
+    <div class="space-y-3 relative z-10">
+      <button type="button" onclick="window.fullReset()" class="w-full py-3 bg-vRose/10 text-vRose border border-vRose/20 rounded-xl font-bold text-[12px] hover:bg-vRose/20 transition-colors">${_t('reset_all')}</button>
+      <button type="button" onclick="window.reqDeleteAccount()" class="w-full py-3 bg-red-600 text-white rounded-xl font-bold text-[12px] shadow-lg shadow-red-600/30 active:scale-[0.98] transition-all">${_t('delete_account')}</button>
+    </div>
   </div>
-  <button type="button" onclick="window.logout()" class="w-full py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 mb-6"><i data-lucide="log-out" class="w-4 h-4"></i> ${_t('logout')}</button>
+  
+  <button type="button" onclick="window.logout()" class="w-full py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 mb-6 shadow-lg active:scale-[0.98] transition-all"><i data-lucide="log-out" class="w-4 h-4"></i> ${_t('logout')}</button>
   `;
 }
 
@@ -535,6 +560,25 @@ window.fullReset = async () => {
     const pin2 = await window.askPin('Are you sure? (2/2)', 'Require PIN again'); await window.callApi('/api/pin', { action:'verify', pin: pin2, accessToken: window.session.access_token });
     await window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
     window.showToast('History Wiped'); await window.loadTxns(); window.changeTab('dashboard');
+  } catch(e){}
+};
+
+window.reqDeleteAccount = async () => {
+  try {
+    const pin = await window.askPin('Delete Account & Data', 'Enter PIN to confirm');
+    await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
+    localStorage.setItem('vault_pending_delete', window.session.user.id);
+    await window.supa.auth.signOut();
+    window.session = null; window.profile = null;
+    window.render();
+    window.showModal(`
+      <div class="text-center">
+        <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 dark:border-red-800/50"><i data-lucide="shield-alert" class="w-8 h-8"></i></div>
+        <h3 class="disp text-xl font-bold mb-2">Re-authentication</h3>
+        <p class="text-sm text-slate-500 mb-6 font-medium">To permanently erase all your data, please log in again with the same Google account.</p>
+        <button onclick="window.hideModal(); window.loginGoogle();" class="w-full py-3.5 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-600/30 active:scale-95 transition-all">Login to Delete Data</button>
+      </div>
+    `);
   } catch(e){}
 };
 
@@ -605,9 +649,9 @@ window.doCrop = () => {
 /* ---------------- admin/manage ---------------- */
 window.openMasterKeyModal = () => {
   window.showModal(`
-    <div class="text-center mb-6"><div class="w-14 h-14 bg-vIndigo/10 text-vIndigo rounded-full flex items-center justify-center mx-auto mb-3 border border-vIndigo/20"><i data-lucide="key-round" class="w-7 h-7"></i></div><h3 class="disp text-2xl font-bold">Master Key</h3></div>
-    <input type="password" id="masterKeyInput" class="w-full p-4 rounded-2xl bg-slate-50 dark:bg-black/30 border text-lg text-center tracking-widest font-mono outline-none" placeholder="••••••••">
-    <div class="flex gap-3 mt-6"><button type="button" onclick="window.hideModal()" class="flex-1 py-4 text-sm bg-slate-200 dark:bg-slate-800 rounded-xl font-bold">Cancel</button><button type="button" id="mk-ok" class="flex-1 py-4 text-sm bg-vIndigo text-white rounded-xl font-bold">Enter</button></div>
+    <div class="text-center mb-6"><div class="w-14 h-14 bg-vIndigo/10 text-vIndigo rounded-full flex items-center justify-center mx-auto mb-3 border border-vIndigo/20"><i data-lucide="key-round" class="w-7 h-7"></i></div><h3 class="disp text-2xl font-bold tracking-tight">Master Key</h3></div>
+    <input type="password" id="masterKeyInput" class="w-full p-4 rounded-2xl glass-input text-lg text-center tracking-widest font-mono outline-none focus:border-vIndigo shadow-inner" placeholder="••••••••">
+    <div class="flex gap-3 mt-6"><button type="button" onclick="window.hideModal()" class="flex-1 py-4 text-sm glass-input rounded-xl font-bold">Cancel</button><button type="button" id="mk-ok" class="flex-1 py-4 text-sm bg-vIndigo text-white rounded-xl font-bold shadow-lg shadow-vIndigo/30 active:scale-95 transition-all">Enter</button></div>
   `);
   document.getElementById('mk-ok').onclick = async () => {
     try {
@@ -630,22 +674,22 @@ function buildManage(){
   if (!window._manageUsers.length) setTimeout(loadManageUsers, 50);
   return `
   <div class="flex items-center justify-between mb-5">
-    <h2 class="disp text-2xl font-bold flex items-center gap-2"><i data-lucide="shield" class="w-6 h-6 text-vIndigo"></i> Manage</h2>
-    <button onclick="window.exitAdmin()" class="text-[10px] bg-slate-200 dark:bg-slate-800 px-3 py-1.5 rounded-lg font-bold">${_t('exit_admin')}</button>
+    <h2 class="disp text-2xl font-extrabold flex items-center gap-2 tracking-tight"><i data-lucide="shield" class="w-6 h-6 text-vIndigo"></i> Manage</h2>
+    <button onclick="window.exitAdmin()" class="text-[10px] glass-input px-3 py-2 rounded-lg font-bold">${_t('exit_admin')}</button>
   </div>
   <div class="space-y-4">
     ${window._manageUsers.map(u=>`
-      <div class="glass border rounded-[28px] p-5 ${u.is_suspended?'border-vRose/40':''}">
+      <div class="glass rounded-[24px] p-5 ${u.is_suspended?'border-vRose/40 bg-vRose/5':''} shadow-sm">
         <div class="flex items-center gap-3 mb-3">
-          <img src="${u.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(u.full_name||'U')}" class="w-11 h-11 rounded-full object-cover border">
-          <div class="min-w-0 flex-1"><p class="font-bold text-sm truncate">${u.full_name||'—'}</p><p class="text-[10px] text-slate-500 mono truncate">${u.email}</p></div>
+          <img src="${u.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(u.full_name||'U')}" class="w-11 h-11 rounded-full object-cover border shadow-sm">
+          <div class="min-w-0 flex-1"><p class="font-bold text-[13px] truncate">${u.full_name||'—'}</p><p class="text-[10px] text-slate-500 font-medium truncate">${u.email}</p></div>
         </div>
-        <div class="grid grid-cols-3 gap-2 mb-3 text-center">
-          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">In</p><p class="font-bold text-vEmerald text-sm">৳${u.totalIncome}</p></div>
-          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">Out</p><p class="font-bold text-vRose text-sm">৳${u.totalExpense}</p></div>
-          <div class="bg-slate-50 dark:bg-black/20 p-2 rounded-xl"><p class="text-[9px] text-slate-500 font-bold uppercase">Bal</p><p class="font-bold text-vGold text-sm">৳${u.balance}</p></div>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">In</p><p class="font-bold text-vEmerald text-[13px]">৳${u.totalIncome}</p></div>
+          <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Out</p><p class="font-bold text-vRose text-[13px]">৳${u.totalExpense}</p></div>
+          <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Bal</p><p class="font-bold text-vGold text-[13px]">৳${u.balance}</p></div>
         </div>
-      </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm">Loading...</div>`}
+      </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">Loading users...</div>`}
   </div>`;
 }
 
@@ -657,9 +701,27 @@ async function boot(){
     const { data: { session } } = await window.supa.auth.getSession(); window.session = session;
     window.supa.auth.onAuthStateChange(async (event, s) => {
       window.session = s;
-      if (s) { await window.loadProfile(); await window.loadTxns(); await window.loadFeedback(); }
+      
+      // Handle pending account deletion flow
+      const pendingDelId = localStorage.getItem('vault_pending_delete');
+      if (s && pendingDelId) {
+        if (s.user.id === pendingDelId) {
+          // Erase all data
+          await window.supa.from('transactions').delete().eq('user_id', s.user.id);
+          await window.supa.from('feedback').delete().eq('user_id', s.user.id);
+          await window.supa.from('profiles').update({ pin_set: false, pin_hash: null, avatar_url: null, full_name: 'Deleted User' }).eq('id', s.user.id);
+          localStorage.removeItem('vault_pending_delete');
+          window.showToast('Account data permanently deleted.');
+        } else {
+          // Logged in with different account, cancel deletion
+          localStorage.removeItem('vault_pending_delete');
+        }
+      }
+
+      if (s && !pendingDelId) { await window.loadProfile(); await window.loadTxns(); await window.loadFeedback(); }
       window.render();
     });
+    
     if (window.session) { await window.loadProfile(); await window.loadTxns(); await window.loadFeedback(); }
     window.render();
     if (window.activeTab === 'add') setTimeout(()=>window.setEntryType('income'), 60);
