@@ -9,8 +9,8 @@
 <title>Vault | Fund Tracker</title>
 <meta name="theme-color" content="#060b09">
 <script>
-  // Force reset language cache from older buggy versions
-  const LANG_VERSION = '3';
+  // Force reset language cache to ensure ENGLISH default for everyone
+  const LANG_VERSION = '4';
   if (localStorage.getItem('vault_lang_version') !== LANG_VERSION) {
     localStorage.removeItem('vault_lang');
     localStorage.setItem('vault_lang_version', LANG_VERSION);
@@ -30,6 +30,7 @@
     if(root) { root.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;width:100%;"><div style="width:40px;height:40px;border:4px solid #12b76a;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px;"></div><p style="color:#64748b;font-weight:bold;font-family:sans-serif;">Clearing session...</p></div>'; }
     localStorage.removeItem('vault_admin_token');
     localStorage.removeItem('vault_pending_delete');
+    localStorage.removeItem('vault_pending_pin_reset');
   }
 </script>
 <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
@@ -50,7 +51,8 @@ tailwind.config = {
   :root { --focus-color: #12b76a; --focus-ring: rgba(18,183,106,0.4); }
   * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-  html,body { background:#f1f5f9; min-height:100%; min-height:100dvh; height:auto; width:100%; max-width:100vw; display:flex; flex-direction:column; transition: background .4s ease; overflow-x:hidden; overscroll-behavior:none; }
+  /* Prevent horizontal scroll and lock viewport effectively for mobile */
+  html,body { background:#f1f5f9; min-height:100%; min-height:100dvh; height:auto; width:100vw; max-width:100%; display:flex; flex-direction:column; transition: background .4s ease; overflow-x:hidden; overscroll-behavior:none; }
   html.dark, html.dark body { background:#0a0a0a; }
   body { font-family:'Inter',sans-serif; }
   .disp { font-family:'Sora',sans-serif; letter-spacing:-0.01em; }
@@ -150,7 +152,8 @@ const LANG = {
     verifying: "যাচাই করা হচ্ছে...", deleted: "মুছে ফেলা হয়েছে!", updating: "আপডেট করা হচ্ছে...", error: "ত্রুটি", old_pin_required: "পুরাতন PIN প্রয়োজন",
     signed_in_as: "লগইন করা আছে", switch_account: "অ্যাকাউন্ট পরিবর্তন", vault_locked: "ভল্ট লক করা আছে", setup_pin_description: "আপনার ফান্ড সুরক্ষিত রাখতে একটি ৬-সংখ্যার PIN তৈরি করুন।",
     setup_security_pin: "সিকিউরিটি PIN সেট করুন", confirm_pin: "PIN নিশ্চিত করুন", confirm_pin_desc: "একই PIN আবার দিন", verify_identity: "ফান্ডে প্রবেশ করতে আপনার পরিচয় যাচাই করুন।", unlock_vault: "ভল্ট আনলক করুন",
-    loading_data: "ডাটা লোড হচ্ছে...", logging_out: "নিরাপদে লগআউট করা হচ্ছে..."
+    loading_data: "ডাটা লোড হচ্ছে...", logging_out: "নিরাপদে লগআউট করা হচ্ছে...",
+    forgot_pin_instruction: "একই অ্যাকাউন্ট দিয়ে পুনরায় লগইন করে PIN রিসেট করুন।"
   },
   en: {
     dashboard: "Home", add: "Entry", history: "History", manage: "Manage", profile: "Profile",
@@ -169,7 +172,8 @@ const LANG = {
     verifying: "Verifying...", deleted: "Deleted!", updating: "Updating...", error: "Error", old_pin_required: "Old PIN is required",
     signed_in_as: "Signed in as", switch_account: "Switch Account", vault_locked: "Vault Locked", setup_pin_description: "Create a 6-digit PIN to protect your funds.",
     setup_security_pin: "Setup Security PIN", confirm_pin: "Confirm PIN", confirm_pin_desc: "Enter the same PIN again", verify_identity: "Please verify your identity to securely access your funds.", unlock_vault: "Unlock Vault",
-    loading_data: "Loading data...", logging_out: "Logging out securely..."
+    loading_data: "Loading data...", logging_out: "Logging out securely...",
+    forgot_pin_instruction: "Sign in again with the same account to reset your PIN."
   }
 };
 window._t = (key) => LANG[window.lang][key] || key;
@@ -180,13 +184,13 @@ window.translateErr = (msg) => {
   if (m.includes('old_pin_required') || m.includes('পুরাতন পিন প্রয়োজন')) return _t('old_pin_required');
   if (m.includes('ভুল পিন') || m.includes('incorrect') || m.includes('invalid login')) return _t('wrong_pin');
   if (m.includes('old_pin_invalid') || m.includes('পুরাতন পিন সঠিক নয়')) return _t('old_pin_err');
-  if (m.includes('৬ সংখ্যার') || m.includes('length')) return _t('pin_length_err');
+  if (m.includes('pin_length_err') || m.includes('৬ সংখ্যার') || m.includes('length')) return _t('pin_length_err');
   if (m.includes('mismatch') || m.includes('মিলেনি')) return _t('mismatch');
   if (m.includes('rate limit') || m.includes('exceeded')) return "Too many requests. Try again later.";
   return msg;
 };
 
-// FIX: Universal Timeout Helper
+// Universal Timeout Helper
 window.withTimeout = (promise, ms, errorMsg = 'Request timed out') => {
   let timer;
   const timeoutPromise = new Promise((_, reject) => {
@@ -305,7 +309,11 @@ document.addEventListener('keydown', window.handlePinKeydown);
 
 window.forgotPin = async () => {
   document.getElementById('pinContainer').classList.add('hidden');
-  window.showToast('Please log in again to verify identity.', 'info');
+  window.showToast(_t('forgot_pin_instruction'), 'info');
+  // Store marker to trigger Reset Flow on next login
+  if (window.session?.user?.id) {
+    localStorage.setItem('vault_pending_pin_reset', window.session.user.id);
+  }
   await window.switchAccount();
 };
 
@@ -523,21 +531,30 @@ function getDevCreditBar() {
   </div>`;
 }
 
+// FIX: Mobile-friendly exact viewport lock + Bottom Credit Bar
 function buildLandingDesktopWrapper() {
   return `
-  <div class="flex-1 w-full h-full flex flex-col relative bg-[#f1f5f9] dark:bg-[#0a0a0a] overflow-hidden">
-    ${getDevCreditBar()}
-    <div class="flex-1 flex flex-col lg:flex-row items-center lg:items-center gap-10 lg:gap-20 px-6 py-8 max-w-6xl mx-auto w-full z-10 overflow-y-auto hide-scrollbar">
-
-      <div class="lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left fade-in m-auto shrink-0">
-        <div class="w-20 h-20 md:w-28 md:h-28 rounded-[28px] md:rounded-[36px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-6 border-[3px] border-white dark:border-[#141414]"><i data-lucide="vault" class="w-10 h-10 md:w-14 md:h-14 text-[#04150c]"></i></div>
-        <h1 class="disp text-5xl md:text-6xl lg:text-[72px] font-extrabold mb-4 tracking-tight text-slate-800 dark:text-white leading-none">Vault</h1>
-        <p class="text-lg md:text-xl text-slate-500 dark:text-slate-400 font-medium max-w-md">The most secure and private way to track your personal finances.</p>
+  <div class="flex-1 w-full h-full flex flex-col relative bg-[#f1f5f9] dark:bg-[#0a0a0a] overflow-x-hidden overflow-y-auto">
+    <div class="flex-1 flex flex-col items-center justify-center px-4 py-8 max-w-md mx-auto w-full z-10">
+      
+      <div class="flex flex-col items-center text-center fade-in mb-8 shrink-0">
+        <div class="w-20 h-20 rounded-[28px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-5 border-[3px] border-white dark:border-[#141414]"><i data-lucide="vault" class="w-10 h-10 text-[#04150c]"></i></div>
+        <h1 class="disp text-5xl font-extrabold mb-3 tracking-tight text-slate-800 dark:text-white leading-none">Vault</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 font-medium px-4">The most secure and private way to track your personal finances.</p>
       </div>
 
-      <div class="w-full max-w-[420px] shrink-0 fade-in pop-in m-auto pb-6">
+      <div class="w-full shrink-0 fade-in pop-in pb-4">
         ${buildLandingForm()}
       </div>
+      
+      <div class="mt-4 w-full flex justify-center fade-in">
+         <div class="px-4 py-2 rounded-2xl bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] font-bold text-slate-500 flex items-center gap-2 shadow-sm">
+           Developed by <a href="${window.CFG?.developerLinkedin || '#'}" target="_blank" class="text-vEmerald hover:underline">Rahat</a>
+           <span>&bull;</span>
+           <a href="${window.CFG?.developerGithub || '#'}" target="_blank" class="flex items-center gap-1 hover:text-slate-700 dark:hover:text-white transition-colors"><i data-lucide="github" class="w-3 h-3"></i> GitHub</a>
+         </div>
+      </div>
+      
     </div>
   </div>`;
 }
@@ -1049,9 +1066,12 @@ function buildProfile(){
   `;
 }
 
-window.forceSetPin = async () => {
+// FIX: New Accounts -> isReset=false. Forgot PIN -> isReset=true.
+window.forceSetPin = async (isReset = false) => {
   if (window._pinFlowActive) return;
-  if (window.profile?.pin_set) { window._pinVerified = true; window.render(); return; } // Prevent backend error
+  // If not resetting and pin is already set, abort UI popup.
+  if (!isReset && window.profile?.pin_set) { window._pinVerified = true; window.render(); return; } 
+  
   window._pinFlowActive = true;
   try {
     const p1 = await window.askPin(_t('setup_security_pin'), _t('setup_pin_description'));
@@ -1062,7 +1082,8 @@ window.forceSetPin = async () => {
     if (p1 !== p2) { window.showToast(_t('mismatch'), 'error'); return; }
     
     window.showToast(_t('setting_pin'), 'info');
-    await window.callApi('/api/pin', { action:'set', pin:p1, accessToken: window.session.access_token });
+    // Important: send correct action based on if it's a reset or brand new setup
+    await window.callApi('/api/pin', { action: isReset ? 'reset' : 'set', pin: p1, accessToken: window.session.access_token });
     
     if(window.profile) window.profile.pin_set = true;
     window._pinVerified = true;
@@ -1104,7 +1125,7 @@ window.changePin = async () => {
 
     if (p1 !== p2) { window.showToast(_t('mismatch'), 'error'); return; }
     window.showToast(_t('updating'), 'info');
-    await window.callApi('/api/pin', { action:'set', pin:p1, oldPin, accessToken: window.session.access_token }); 
+    await window.callApi('/api/pin', { action:'change', pin:p1, oldPin, accessToken: window.session.access_token }); 
     window.showToast('PIN Changed');
   } catch(e) { 
     if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
@@ -1342,31 +1363,6 @@ function hideBoot() {
   }
 }
 
-// FIX: Setup Account Preview on Boot
-function updateBootAccount(session) {
-  const el = document.getElementById('bootAccount');
-  if (!el || !session?.user) return;
-  const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'User';
-  const email = session.user.email || '';
-  el.innerHTML = `
-    <div class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm text-left">
-      <div class="w-9 h-9 rounded-full bg-vEmerald/10 text-vEmerald flex items-center justify-center shrink-0 border border-vEmerald/20">
-        <i data-lucide="user" class="w-4 h-4"></i>
-      </div>
-      <div class="min-w-0 flex-1">
-        <p class="text-[9px] uppercase tracking-widest text-slate-400 font-bold">${_t('signed_in_as')}</p>
-        <p class="text-xs font-bold truncate text-slate-800 dark:text-white">${name}</p>
-        <p class="text-[10px] text-slate-500 truncate">${email}</p>
-      </div>
-      <button onclick="window.switchAccount()" class="px-3 py-2 rounded-xl bg-slate-800 dark:bg-white text-white dark:text-slate-900 text-[10px] font-bold shadow-sm shrink-0">
-        ${_t('switch_account')}
-      </button>
-    </div>
-  `;
-  el.classList.remove('hidden');
-  lucide.createIcons();
-}
-
 async function boot() {
   const bootRetryBtn = document.getElementById('bootRetryBtn');
   const bootStatusText = document.getElementById('bootStatusText');
@@ -1404,10 +1400,8 @@ async function boot() {
     }
 
     window.session = session;
-    updateBootAccount(session); // Show user card right away during boot
     
     const pendingDelId = localStorage.getItem('vault_pending_delete');
-
     if (pendingDelId && session.user.id === pendingDelId) {
       localStorage.removeItem('vault_pending_delete');
       try { await window.callApi('/api/pin', { action: 'delete_account', accessToken: session.access_token }); } catch (e) {}
@@ -1418,6 +1412,21 @@ async function boot() {
 
     // Load profile
     await window.loadProfile();
+    
+    // Check if user requested a PIN reset previously
+    const pendingResetId = localStorage.getItem('vault_pending_pin_reset');
+    if (pendingResetId && session.user.id === pendingResetId) {
+      localStorage.removeItem('vault_pending_pin_reset');
+      if (bootFinished) return;
+      if (window.location.hash || window.location.search) { window.history.replaceState(null, '', window.location.pathname); }
+      
+      window._pinVerified = false;
+      if (window.profile) window.profile.pin_set = false; // Trick frontend to go to lock screen
+      finishBoot();
+      setTimeout(() => window.forceSetPin(true), 300); // the `true` flag tells api/pin to use "action: reset"
+      return;
+    }
+
     if (bootFinished) return;
 
     if (window.location.hash || window.location.search) {
