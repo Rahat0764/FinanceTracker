@@ -2,7 +2,6 @@
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<!-- Completely locked viewport to prevent random desktop mode switching on mobile -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,7 +11,18 @@
 <script>
   if (localStorage.getItem('vault_theme') === 'light') document.documentElement.classList.remove('dark');
   else document.documentElement.classList.add('dark');
+  
+  // FIX: Early Switch Account Handler (Works even before JS fully loads)
+  window.__earlySwitchRequested = false;
+  function handleEarlySwitch() {
+    window.__earlySwitchRequested = true;
+    var boot = document.getElementById('boot');
+    if (boot) { boot.style.opacity = '0'; setTimeout(function(){ boot.style.display = 'none'; }, 300); }
+    var root = document.getElementById('root');
+    if(root) { root.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;width:100%;"><div style="width:40px;height:40px;border:4px solid #12b76a;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px;"></div><p style="color:#64748b;font-weight:bold;font-family:sans-serif;">Cancelling session...</p></div>'; }
+  }
 </script>
+<style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -70,10 +80,9 @@ tailwind.config = {
       <p id="bootStatusText" class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Starting Vault</p>
     </div>
     
-    <!-- Fix: Boot screen Switch Account + Retry -->
     <div class="flex items-center gap-3 mt-4">
       <button id="bootRetryBtn" onclick="window.location.reload()" class="hidden text-[11px] font-bold text-vEmerald underline">Retry</button>
-      <button onclick="window.switchAccount()" class="px-4 py-2 rounded-xl bg-white/70 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm z-50 transition-transform active:scale-95">Switch Account</button>
+      <button onclick="typeof window.switchAccount === 'function' ? window.switchAccount() : handleEarlySwitch()" class="px-4 py-2 rounded-xl bg-white/70 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm z-50 transition-transform active:scale-95">Switch Account</button>
     </div>
   </div>
 </div>
@@ -152,14 +161,26 @@ window.translateErr = (msg) => {
   return msg;
 };
 
-window.supa = null; window.session = null; window.profile = null; window.isAuthLoading = false;
+// FIX: Universal Timeout Helper
+window.withTimeout = (promise, ms, errorMsg = 'Request timed out') => {
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(errorMsg)), ms);
+  });
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    timeoutPromise
+  ]);
+};
+
+window.supa = null; window.session = null; window.profile = null;
 window.adminToken = localStorage.getItem('vault_admin_token') || null;
 window.activeTab = localStorage.getItem('vault_tab') || 'dashboard';
 window.txns = []; window.feedbackList = []; window.CFG = {}; window.logoTapCount = 0;
 window.authMode = 'login'; 
 window.regState = { step: 1, email: '', otp: '', password: '' };
 window._regTimerLeft = 0; window._regTimer = null;
-window._bootCancelled = false; // Prevent race conditions
+window._bootCancelled = false; 
 window.isTxnLoading = false;
 
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
@@ -256,7 +277,7 @@ window.forgotPin = async () => {
 };
 
 window.callApi = async (path, body) => {
-  const res = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
+  const res = await window.withTimeout(fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) }), 8000);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Server Error');
   return json;
@@ -323,7 +344,7 @@ window.setRegPassword = async () => {
   window.showToast('Account Created Successfully!'); window.render();
 };
 
-// Fix: switchAccount function added to cleanly wipe everything and redirect to login
+// FIX: Complete and Safe Session Reset
 window.switchAccount = async () => {
   window._bootCancelled = true;
   window._pinVerified = false;
@@ -332,25 +353,36 @@ window.switchAccount = async () => {
   window.txns = [];
   window.adminToken = null;
   localStorage.removeItem('vault_admin_token');
-  try { if (window.supa) await window.supa.auth.signOut(); } catch (e) { console.warn(e); }
-  if (typeof window.ultimateTimeout !== 'undefined') clearTimeout(window.ultimateTimeout);
+  localStorage.removeItem('vault_pending_delete');
+  
   hideBoot();
+  const root = document.getElementById('root');
+  if (root) root.innerHTML = '<div class="p-10 text-center w-full mt-20 fade-in"><div class="w-10 h-10 border-4 border-vEmerald border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p class="font-bold text-slate-500">Logging out securely...</p></div>';
+
+  try { if (window.supa) await window.withTimeout(window.supa.auth.signOut(), 3000); } catch (e) { console.warn(e); }
+  if (typeof window.ultimateTimeout !== 'undefined') clearTimeout(window.ultimateTimeout);
+  
+  window._bootCancelled = false;
+  window.authMode = 'login';
   window.render();
 };
 window.logout = window.switchAccount;
 window.exitAdmin = () => { window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.changeTab('dashboard'); };
 
-// Fix: Much faster Profile load retry logic
+// FIX: Robust Profile Loader with timeouts
 window.loadProfile = async (retry = 0) => {
   try {
     if (!window.session?.user?.id) return false;
-    const { data, error } = await window.supa.from('profiles').select('*').eq('id', window.session.user.id).single();
+    const { data, error } = await window.withTimeout(
+      window.supa.from('profiles').select('*').eq('id', window.session.user.id).single(),
+      4000
+    );
     if(error) throw error; 
     window.profile = data;
     return true;
   } catch(e) { 
     if(retry < 2) {
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 400));
       return window.loadProfile(retry + 1);
     }
     console.error('Profile load failed:', e); 
@@ -358,18 +390,21 @@ window.loadProfile = async (retry = 0) => {
   }
 };
 
-// Fix: Background friendly loadTxns. Re-renders UI silently when data arrives.
+// FIX: Background Loading of All Transactions with timeouts
 window.loadTxns = async (silent = false) => {
   try {
     if (!window.session?.user?.id) return false;
     window.isTxnLoading = true;
     if (window.session) window.render();
 
-    const { data, error } = await window.supa.from('transactions')
-      .select('*')
-      .eq('user_id', window.session.user.id)
-      .order('txn_date', { ascending:false })
-      .order('created_at', { ascending:false });
+    const { data, error } = await window.withTimeout(
+      window.supa.from('transactions')
+        .select('*')
+        .eq('user_id', window.session.user.id)
+        .order('txn_date', { ascending:false })
+        .order('created_at', { ascending:false }),
+      8000
+    );
       
     if(error) throw error; 
     window.txns = data || [];
@@ -404,7 +439,6 @@ window.switchAuthMode = (mode) => {
   window.render(); 
 };
 
-// Fix: Developer Credit bar perfectly positioned directly under the header on mobile
 function getDevCreditBar() {
   return `
   <div class="w-full bg-[#101014] text-white border-b border-white/5 py-1.5 md:py-2.5 px-3 md:px-4 flex flex-wrap justify-center items-center gap-x-2 gap-y-0.5 text-[9px] md:text-[11px] font-bold z-50 shadow-md shrink-0">
@@ -520,7 +554,7 @@ function buildSuspended(){
   return `<div class="flex-1 flex flex-col items-center justify-center px-6 text-center fade-in">
     <div class="w-16 h-16 rounded-full bg-vRose/10 text-vRose flex items-center justify-center mb-5 border border-vRose/20"><i data-lucide="shield-off" class="w-8 h-8"></i></div>
     <h2 class="disp text-2xl font-bold mb-2">Account Suspended</h2>
-    <p class="text-sm text-slate-500 max-w-xs mb-8">${window.profile.suspend_reason || 'Violation of terms.'}</p>
+    <p class="text-sm text-slate-500 max-w-xs mb-8">${window.profile?.suspend_reason || 'Violation of terms.'}</p>
     <button type="button" onclick="window.switchAccount()" class="py-3.5 px-8 glass-input rounded-2xl font-bold shadow-sm">Logout</button>
   </div>`;
 }
@@ -627,6 +661,7 @@ function buildTabContent(){
 }
 
 function buildDashboard(){
+  const p = window.profile || {};
   const income = window.txns.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
   const expense = window.txns.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
   const balance = income - expense;
@@ -641,7 +676,7 @@ function buildDashboard(){
       <div>
         <p class="text-vEmerald font-bold text-[10px] uppercase tracking-[0.2em] mb-1.5 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-vEmerald animate-pulse shadow-[0_0_8px_#12b76a]"></span> ${window.lang==='en'?EN_DAYS[now.getDay()]:BN_DAYS[now.getDay()]}</p>
         <h2 class="disp text-[26px] md:text-3xl font-extrabold mb-1 tracking-tight">${formatDate(now)}</h2>
-        <p class="text-[13px] text-slate-500 font-medium">${_t('welcome')}, ${window.profile.full_name?.split(' ')[0]||'User'}</p>
+        <p class="text-[13px] text-slate-500 font-medium">${_t('welcome')}, ${p.full_name?.split(' ')[0]||'User'}</p>
       </div>
       <svg width="100" height="100" viewBox="0 0 100 100" class="-rotate-90 shrink-0 drop-shadow-md">
         <circle cx="50" cy="50" r="${r}" fill="none" stroke-width="8" class="ring-track"></circle>
@@ -896,8 +931,8 @@ window.verifyEmailChange = async () => {
 };
 
 function buildProfile(){
-  const p = window.profile;
-  const identities = window.session.user.identities || [];
+  const p = window.profile || {};
+  const identities = window.session?.user?.identities || [];
   const gId = identities.find(i => i.provider === 'google');
   const ghId = identities.find(i => i.provider === 'github');
   
@@ -912,7 +947,7 @@ function buildProfile(){
       <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="window.initCropper(event)">
     </div>
     <h3 class="disp text-xl font-bold tracking-tight">${p.full_name || 'User'}</h3>
-    <p class="text-xs text-slate-500 font-medium mt-0.5 flex items-center justify-center gap-1.5">${p.email} <button onclick="window.openEmailModal()" class="text-vIndigo hover:bg-vIndigo/10 p-1 rounded-md transition-colors"><i data-lucide="edit-2" class="w-3 h-3"></i></button></p>
+    <p class="text-xs text-slate-500 font-medium mt-0.5 flex items-center justify-center gap-1.5">${p.email || ''} <button onclick="window.openEmailModal()" class="text-vIndigo hover:bg-vIndigo/10 p-1 rounded-md transition-colors"><i data-lucide="edit-2" class="w-3 h-3"></i></button></p>
   </div>
   
   <div class="glass rounded-[28px] p-5 mb-5 shadow-sm">
@@ -987,7 +1022,7 @@ window.fullReset = async () => {
 };
 
 // =========================================================
-// Account Deletion Flow - Fixed
+// Account Deletion Flow
 // =========================================================
 window.reqDeleteAccount = async () => {
   try {
@@ -1018,8 +1053,6 @@ window.reqDeleteAccount = async () => {
         Verify with GitHub
       </button>`;
     }
-    
-    // Fallback just in case
     if(!hasGoogle && !hasGithub) {
       buttonsHtml += `<button onclick="window.switchAccount()" class="w-full py-3.5 mb-3 bg-red-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all">Log Out to Verify</button>`;
     }
@@ -1195,16 +1228,23 @@ async function boot(){
   window.ultimateTimeout = setTimeout(() => {
     if (bootStatusText) bootStatusText.innerText = 'Taking longer than usual...';
     if (bootRetryBtn) bootRetryBtn.classList.remove('hidden');
-  }, 5000); 
+  }, 6000); 
 
   try {
-    const cfgRes = await fetch('/api/config');
+    const cfgRes = await window.withTimeout(fetch('/api/config'), 5000);
     if(!cfgRes.ok) throw new Error('Config load failed');
     window.CFG = await cfgRes.json();
     window.supa = createClient(window.CFG.supabaseUrl, window.CFG.supabaseAnonKey);
 
     window.supa.auth.onAuthStateChange(async (event, s) => {
       if (window._bootCancelled) return; 
+
+      // If user clicked Switch Account during load
+      if (window.__earlySwitchRequested) {
+         window.__earlySwitchRequested = false;
+         if(window.switchAccount) await window.switchAccount();
+         return;
+      }
       
       window.session = s;
       const pendingDelId = localStorage.getItem('vault_pending_delete');
@@ -1234,7 +1274,14 @@ async function boot(){
       
       if (s && !pendingDelId) { 
         // 1. NON-BLOCKING STARTUP: Load profile only, UI renders instantly
-        await window.loadProfile();
+        const profileSuccess = await window.loadProfile();
+        
+        if (!profileSuccess) {
+          clearTimeout(window.ultimateTimeout); hideBoot();
+          document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><div class="text-4xl mb-4">⚠️</div><h2 class="font-bold text-lg mb-2">Couldn't load account</h2><p class="text-sm text-slate-500 mb-6">Your connection is unstable or timed out.</p><div class="flex gap-3 justify-center w-full max-w-xs"><button onclick="window.location.reload()" class="flex-1 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold shadow-sm active:scale-95">Retry</button><button onclick="window.switchAccount()" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold shadow-sm active:scale-95 text-[12px]">Switch Account</button></div></div>`;
+          return;
+        }
+
         if (window.location.hash || window.location.search) window.history.replaceState(null, '', window.location.pathname);
         clearTimeout(window.ultimateTimeout); hideBoot(); window.render();
         
@@ -1248,7 +1295,7 @@ async function boot(){
     if (window.activeTab === 'add') setTimeout(()=>window.setEntryType('income'), 60);
   } catch(e) { 
     clearTimeout(window.ultimateTimeout); hideBoot();
-    document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><p class="text-sm text-slate-500 mb-4">Network error. Please try again.</p><button onclick="window.location.reload()" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold">Reload App</button></div>`;
+    document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><div class="text-4xl mb-4">🌐</div><h2 class="font-bold text-lg mb-2">Network Error</h2><p class="text-sm text-slate-500 mb-6">Vault couldn't connect to the server.</p><div class="flex gap-3 justify-center w-full max-w-xs"><button onclick="window.location.reload()" class="flex-1 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold shadow-sm active:scale-95">Retry App</button><button onclick="handleEarlySwitch(); setTimeout(()=>window.location.reload(), 500)" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold shadow-sm active:scale-95 text-[11px]">Clear & Switch</button></div></div>`;
   }
 }
 boot();
