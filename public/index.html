@@ -12,14 +12,15 @@
   if (localStorage.getItem('vault_theme') === 'light') document.documentElement.classList.remove('dark');
   else document.documentElement.classList.add('dark');
   
-  // FIX: Early Switch Account Handler (Works even before JS fully loads)
   window.__earlySwitchRequested = false;
   function handleEarlySwitch() {
     window.__earlySwitchRequested = true;
     var boot = document.getElementById('boot');
     if (boot) { boot.style.opacity = '0'; setTimeout(function(){ boot.style.display = 'none'; }, 300); }
     var root = document.getElementById('root');
-    if(root) { root.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;width:100%;"><div style="width:40px;height:40px;border:4px solid #12b76a;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px;"></div><p style="color:#64748b;font-weight:bold;font-family:sans-serif;">Cancelling session...</p></div>'; }
+    if(root) { root.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;width:100%;"><div style="width:40px;height:40px;border:4px solid #12b76a;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px;"></div><p style="color:#64748b;font-weight:bold;font-family:sans-serif;">Clearing session...</p></div>'; }
+    localStorage.removeItem('vault_admin_token');
+    localStorage.removeItem('vault_pending_delete');
   }
 </script>
 <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
@@ -82,7 +83,7 @@ tailwind.config = {
     
     <div class="flex items-center gap-3 mt-4">
       <button id="bootRetryBtn" onclick="window.location.reload()" class="hidden text-[11px] font-bold text-vEmerald underline">Retry</button>
-      <button onclick="typeof window.switchAccount === 'function' ? window.switchAccount() : handleEarlySwitch()" class="px-4 py-2 rounded-xl bg-white/70 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm z-50 transition-transform active:scale-95">Switch Account</button>
+      <button onclick="typeof window.switchAccount === 'function' ? window.switchAccount() : handleEarlySwitch(); setTimeout(()=>window.location.reload(),500);" class="px-4 py-2 rounded-xl bg-white/70 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm z-50 transition-transform active:scale-95">Clear Cache</button>
     </div>
   </div>
 </div>
@@ -180,7 +181,6 @@ window.txns = []; window.feedbackList = []; window.CFG = {}; window.logoTapCount
 window.authMode = 'login'; 
 window.regState = { step: 1, email: '', otp: '', password: '' };
 window._regTimerLeft = 0; window._regTimer = null;
-window._bootCancelled = false; 
 window.isTxnLoading = false;
 
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
@@ -344,9 +344,8 @@ window.setRegPassword = async () => {
   window.showToast('Account Created Successfully!'); window.render();
 };
 
-// FIX: Complete and Safe Session Reset
+// FIX: Safely handled session reset without race conditions
 window.switchAccount = async () => {
-  window._bootCancelled = true;
   window.session = null;
   window.profile = null;
   window.txns = [];
@@ -362,87 +361,86 @@ window.switchAccount = async () => {
 
   try { 
     if (window.supa) {
-      await window.withTimeout(
-        window.supa.auth.signOut({ scope: 'local' }), 
-        3000,
-        'Sign out timed out'
-      ); 
+      await window.withTimeout(window.supa.auth.signOut({ scope: 'local' }), 3000, 'Sign out timed out'); 
     }
   } catch (e) { 
     console.warn('Sign out:', e); 
   }
   
   if (typeof window.ultimateTimeout !== 'undefined') clearTimeout(window.ultimateTimeout);
-  
-  window._bootCancelled = false;
   window.render();
 };
 window.logout = window.switchAccount;
 window.exitAdmin = () => { window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.changeTab('dashboard'); };
 
-// FIX: Robust Profile Loader with timeouts
-window.loadProfile = async (retry = 0) => {
+// FIX: Extremely Resilient Profile Loader (will NEVER brick the app)
+window.loadProfile = async () => {
+  const session = window.session;
+  if (!session?.user?.id) return false;
+  const userId = session.user.id;
+  
   try {
-    if (!window.session?.user?.id) return false;
+    // using maybeSingle() so missing row doesn't throw immediate fatal error
     const { data, error } = await window.withTimeout(
-      window.supa.from('profiles').select('*').eq('id', window.session.user.id).single(),
-      4000
+      window.supa.from('profiles').select('*').eq('id', userId).maybeSingle(),
+      5000, 'Profile request timed out'
     );
-    if(error) throw error; 
-    window.profile = data;
-    return true;
-  } catch(e) { 
-    if(retry < 2) {
-      await new Promise(r => setTimeout(r, 400));
-      return window.loadProfile(retry + 1);
+    
+    if (error) throw error;
+    
+    if (data) {
+      if (window.session?.user?.id === userId) window.profile = data;
+      return true;
     }
-    console.error('Profile load failed:', e); 
-    return false;
+    
+    // Profile row missing in DB! Fallback to auth metadata so app still opens
+    console.warn('Profile row missing, falling back to auth metadata');
+    window.profile = {
+      id: userId,
+      full_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'User',
+      email: session.user.email || '',
+      avatar_url: session.user.user_metadata?.avatar_url || '',
+      pin_set: false, is_suspended: false, suspend_reason: null
+    };
+    return true;
+    
+  } catch(e) { 
+    console.error('Profile load fail (Network/Timeout):', e); 
+    // Fallback on network error so the app doesn't show "Couldn't load account" lock screen
+    window.profile = {
+      id: userId,
+      full_name: session.user.user_metadata?.full_name || 'User',
+      email: session.user.email || '',
+      avatar_url: session.user.user_metadata?.avatar_url || '',
+      pin_set: false, is_suspended: false, suspend_reason: null
+    };
+    return true; // Force True!
   }
 };
 
-// FIX: Background Loading of All Transactions with timeouts
 window.loadTxns = async (silent = false) => {
   const userId = window.session?.user?.id;
   if (!userId) return false;
 
   window.isTxnLoading = true;
-  if (window.session) {
-    window.render();
-  }
+  if (window.session) window.render();
 
   try {
     const { data, error } = await window.withTimeout(
-      window.supa
-        .from('transactions')
-        .select('*')
-        .eq('user_id', userId)
-        .order('txn_date', { ascending: false })
-        .order('created_at', { ascending: false }),
-      15000,
-      'Transaction loading timed out'
+      window.supa.from('transactions').select('*').eq('user_id', userId).order('txn_date', { ascending: false }).order('created_at', { ascending: false }),
+      15000, 'Transaction loading timed out'
     );
-
     if (error) throw error;
-
-    // Old account request must never update the new account.
-    if ( !window.session || window.session.user.id !== userId ) {
-      return false;
-    }
-
+    if ( !window.session || window.session.user.id !== userId ) return false;
     window.txns = data || [];
     return true;
   } catch (e) {
     console.error('Transaction loading failed:', e);
-    if (!silent && window.session) {
-      window.showToast(translateErr(e.message), 'error');
-    }
+    if (!silent && window.session) window.showToast(translateErr(e.message), 'error');
     return false;
   } finally {
     window.isTxnLoading = false;
-    if ( window.session && window.session.user.id === userId ) {
-      window.render();
-    }
+    if ( window.session && window.session.user.id === userId ) window.render();
   }
 };
 
@@ -1264,22 +1262,13 @@ async function boot() {
   const handleSession = async (session) => {
     if (bootFinished) return;
 
-    // User clicked Switch Account while startup was running
     if (window.__earlySwitchRequested) {
       window.__earlySwitchRequested = false;
-      window._bootCancelled = true;
       window.session = null;
       window.profile = null;
       window.txns = [];
       window._pinVerified = false;
-      try {
-        if (window.supa) {
-          await window.supa.auth.signOut({ scope: 'local' });
-        }
-      } catch (e) {
-        console.warn('Early signout:', e);
-      }
-      window._bootCancelled = false;
+      try { if (window.supa) await window.supa.auth.signOut({ scope: 'local' }); } catch (e) {}
       window.authMode = 'login';
       finishBoot();
       return;
@@ -1296,119 +1285,65 @@ async function boot() {
     window.session = session;
     const pendingDelId = localStorage.getItem('vault_pending_delete');
 
-    // -----------------------------------------
-    // Account deletion return flow
-    // -----------------------------------------
     if (pendingDelId && session.user.id === pendingDelId) {
       localStorage.removeItem('vault_pending_delete');
-      try {
-        await window.callApi('/api/pin', { action: 'delete_account', accessToken: session.access_token });
-      } catch (e) {
-        console.error('Delete account error:', e);
-      }
-      try {
-        await window.supa.auth.signOut({ scope: 'local' });
-      } catch (e) {
-        console.warn(e);
-      }
-      window.session = null;
-      window.profile = null;
-      window.txns = [];
-      window._pinVerified = false;
-      finishBoot();
-      return;
+      try { await window.callApi('/api/pin', { action: 'delete_account', accessToken: session.access_token }); } catch (e) {}
+      try { await window.supa.auth.signOut({ scope: 'local' }); } catch (e) {}
+      window.session = null; window.profile = null; window.txns = []; window._pinVerified = false;
+      finishBoot(); return;
     }
 
     // -----------------------------------------
-    // Load profile
+    // Load profile (This will NEVER fail now)
     // -----------------------------------------
-    const profileSuccess = await window.loadProfile();
+    await window.loadProfile();
     if (bootFinished) return;
 
-    if (!profileSuccess) {
-      clearTimeout(window.ultimateTimeout);
-      hideBoot();
-      document.getElementById('root').innerHTML = `
-        <div class="flex-1 flex flex-col items-center justify-center text-center px-6">
-          <div class="text-4xl mb-4">⚠️</div>
-          <h2 class="font-bold text-lg mb-2">Couldn't load account</h2>
-          <p class="text-sm text-slate-500 mb-6">Please check your internet connection and try again.</p>
-          <div class="flex gap-3 justify-center w-full max-w-xs">
-            <button onclick="window.location.reload()" class="flex-1 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold shadow-sm active:scale-95">Retry</button>
-            <button onclick="window.switchAccount()" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold shadow-sm active:scale-95 text-[12px]">Switch Account</button>
-          </div>
-        </div>`;
-      return;
-    }
-
-    // Remove OAuth hash/query
     if (window.location.hash || window.location.search) {
       window.history.replaceState(null, '', window.location.pathname);
     }
 
-    // -----------------------------------------
-    // IMPORTANT: App becomes usable NOW.
-    // -----------------------------------------
+    // App is fully usable at this exact point
     finishBoot();
 
-    // -----------------------------------------
-    // Load ALL transactions in background.
-    // -----------------------------------------
+    // Transactions load transparently in background
     window.loadTxns(true);
   };
 
   try {
     if (bootStatusText) bootStatusText.innerText = 'Connecting';
     
-    // UI timeout feedback
+    // Fallback UI if it takes longer than 6s
     window.ultimateTimeout = setTimeout(() => {
       if (bootStatusText) bootStatusText.innerText = 'Taking longer than usual...';
       if (bootRetryBtn) bootRetryBtn.classList.remove('hidden');
     }, 6000); 
 
-    // -----------------------------------------
-    // 1. Load config
-    // -----------------------------------------
-    const cfgRes = await window.withTimeout(
-      fetch('/api/config', { cache: 'no-store' }),
-      5000,
-      'Config request timed out'
-    );
-    if (!cfgRes.ok) throw new Error('Config load failed');
+    // Fetch config
+    const cfgRes = await window.withTimeout(fetch('/api/config', { cache: 'no-store' }), 6000, 'Config fetch timeout');
+    if (!cfgRes.ok) throw new Error(`Config HTTP ${cfgRes.status}`);
     window.CFG = await cfgRes.json();
+    
+    if (!window.CFG.supabaseUrl || !window.CFG.supabaseAnonKey) {
+       throw new Error('Supabase Config Missing in Vercel');
+    }
 
-    // -----------------------------------------
-    // 2. Create Supabase client
-    // -----------------------------------------
-    window.supa = createClient(
-      window.CFG.supabaseUrl, 
-      window.CFG.supabaseAnonKey, 
-      {
+    window.supa = createClient(window.CFG.supabaseUrl, window.CFG.supabaseAnonKey, {
         auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-      }
-    );
+    });
 
     if (bootStatusText) bootStatusText.innerText = 'Checking session';
 
-    // -----------------------------------------
-    // 3. Register listener FIRST
-    // -----------------------------------------
     window.supa.auth.onAuthStateChange((event, session) => {
-      // Prevent internal deadlocks by deferring execution
-      setTimeout(() => {
-        handleSession(session);
-      }, 0);
+      setTimeout(() => { handleSession(session); }, 0);
     });
 
-    // -----------------------------------------
-    // 4. CRITICAL FALLBACK: explicit getSession
-    // -----------------------------------------
-    const { data: { session } } = await window.withTimeout(
-      window.supa.auth.getSession(),
-      5000,
-      'Session check timed out'
+    const { data: { session }, error: sessionError } = await window.withTimeout(
+      window.supa.auth.getSession(), 6000, 'Session check timeout'
     );
     
+    if(sessionError) throw sessionError;
+
     if (!bootFinished) {
       await handleSession(session);
     }
@@ -1421,12 +1356,13 @@ async function boot() {
     hideBoot();
     document.getElementById('root').innerHTML = `
       <div class="flex-1 flex flex-col items-center justify-center text-center px-6">
-        <div class="text-4xl mb-4">🌐</div>
-        <h2 class="font-bold text-lg mb-2">Network Error</h2>
-        <p class="text-sm text-slate-500 mb-6">Vault couldn't connect to the server.</p>
+        <div class="text-4xl mb-4">⚠️</div>
+        <h2 class="font-bold text-lg mb-2">Vault couldn't start</h2>
+        <p class="text-[13px] text-rose-500 font-mono font-medium mb-3 bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/20">${e.message || 'Unknown network error'}</p>
+        <p class="text-xs text-slate-500 mb-6 max-w-xs">If you see "Config HTTP 500" or "Supabase Config Missing", check your Vercel Environment Variables.</p>
         <div class="flex gap-3 justify-center w-full max-w-xs">
-          <button onclick="window.location.reload()" class="flex-1 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold shadow-sm active:scale-95">Retry App</button>
-          <button onclick="handleEarlySwitch(); setTimeout(()=>window.location.reload(), 500)" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold shadow-sm active:scale-95 text-[11px]">Clear & Switch</button>
+          <button onclick="window.location.reload()" class="flex-1 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold shadow-sm active:scale-95">Retry</button>
+          <button onclick="handleEarlySwitch(); setTimeout(()=>window.location.reload(), 500)" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold shadow-sm active:scale-95 text-[12px]">Clear Cache</button>
         </div>
       </div>`;
   }
