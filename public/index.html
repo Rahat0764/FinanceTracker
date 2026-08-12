@@ -424,12 +424,12 @@ function buildDashboard(){
   const day = now.getDate(); const left = daysInMonth - day;
   const pct = left / daysInMonth;
   const r = 42, circ = 2*Math.PI*r; const offset = circ * (1 - pct);
-  
+
   let progColor = '#12b76a';
   if(pct < 0.25) progColor = '#f2495c';
   else if(pct < 0.5) progColor = '#f97316';
   else if(pct < 0.75) progColor = '#f2b705';
-  
+
   return `
   <div class="cut glass p-6 md:p-8 relative overflow-hidden mb-6 shadow-sm">
     <div class="flex justify-between items-center gap-6">
@@ -563,7 +563,7 @@ window.bulkDeleteTxn = async (type) => {
     if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
     window.showToast('Verifying PIN...', 'info');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
-    
+
     let query = window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
     if (type !== 'all') query = query.eq('type', type);
     const { error } = await query;
@@ -678,7 +678,7 @@ window.fullReset = async () => {
     if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
     window.showToast('Verifying PIN...', 'info');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
-    
+
     await window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
     window.showToast('History Wiped'); await window.loadTxns(); window.render();
   } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
@@ -691,7 +691,7 @@ window.reqDeleteAccount = async () => {
     if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
     window.showToast('Verifying PIN...', 'info');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
-    
+
     localStorage.setItem('vault_pending_delete', window.session.user.id);
     await window.supa.auth.signOut();
     window.session = null; window.profile = null;
@@ -744,7 +744,7 @@ function applyBounds() {
   const minDx = cx + 140 - (cropState.img.naturalWidth * cropState.scale);
   const maxDy = cy - 140;
   const minDy = cy + 140 - (cropState.img.naturalHeight * cropState.scale);
-  
+
   if (cropState.dx > maxDx) cropState.dx = maxDx;
   if (cropState.dx < minDx) cropState.dx = minDx;
   if (cropState.dy > maxDy) cropState.dy = maxDy;
@@ -785,12 +785,12 @@ cArea.addEventListener('pointermove', e => {
     let newScale = cropState.initScale * zoomFactor;
     const minScale = Math.max(280 / cropState.img.naturalWidth, 280 / cropState.img.naturalHeight);
     if(newScale < minScale) newScale = minScale;
-    
+
     cropState.scale = newScale;
     const cx = cArea.clientWidth / 2; const cy = cArea.clientHeight / 2;
     cropState.dx = cx - (cx - cropState.dx) * (cropState.scale / oldScale);
     cropState.dy = cy - (cy - cropState.dy) * (cropState.scale / oldScale);
-    
+
     applyBounds();
     updateCropView();
     document.getElementById('cropZoom').value = cropState.scale;
@@ -898,7 +898,7 @@ async function boot(){
       const pendingDelId = localStorage.getItem('vault_pending_delete');
       if (s && pendingDelId) {
         if (s.user.id === pendingDelId) {
-          document.body.insertAdjacentHTML('beforeend', \`<div id="del-overlay" class="fixed inset-0 bg-black/90 z-[9999] flex flex-col items-center justify-center text-white"><i data-lucide="loader-2" class="w-10 h-10 animate-spin mb-4 text-red-500"></i><p class="font-bold text-lg animate-pulse">Deleting completely...</p></div>\`);
+          document.body.insertAdjacentHTML('beforeend', `<div id="del-overlay" class="fixed inset-0 bg-black/90 z-[9999] flex flex-col items-center justify-center text-white"><i data-lucide="loader-2" class="w-10 h-10 animate-spin mb-4 text-red-500"></i><p class="font-bold text-lg animate-pulse">Deleting completely...</p></div>\`);
           lucide.createIcons();
           try {
              await window.callApi('/api/pin', { action: 'delete_account', accessToken: s.access_token });
@@ -929,7 +929,7 @@ async function boot(){
     window.render();
     if (window.activeTab === 'add') setTimeout(()=>window.setEntryType('income'), 60);
   } catch(e) { 
-    document.getElementById('root').innerHTML = \`<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><p class="text-sm text-slate-500 mb-4">Network error. Please try again.</p><button onclick="window.location.reload()" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold">Reload App</button></div>\`;
+    document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><p class="text-sm text-slate-500 mb-4">Network error. Please try again.</p><button onclick="window.location.reload()" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold">Reload App</button></div>\`;
   } finally { 
     const boot = document.getElementById('boot'); boot.classList.add('boot-hide'); setTimeout(()=>boot.remove(), 400); 
   }
