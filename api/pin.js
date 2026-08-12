@@ -15,27 +15,48 @@ module.exports = async (req, res) => {
       return res.status(200).json({ pin_set: !!(data && data.pin_set), is_suspended: !!(data && data.is_suspended) });
     }
 
+    // 1. SET: Only for COMPLETELY NEW accounts (First time PIN)
     if (action === 'set') {
-      if (!pin || String(pin).length !== 6) return res.status(400).json({ error: '৬ সংখ্যার পিন দিন' });
-
-      const { data: prof } = await sb.from('profiles').select('pin_set, pin_hash').eq('id', user.id).single();
-      if (prof && prof.pin_set) {
-        if (!oldPin) return res.status(400).json({ error: 'পুরাতন পিন প্রয়োজন' });
-        if (!checkPin(oldPin, prof.pin_hash)) return res.status(401).json({ error: 'পুরাতন পিন সঠিক নয়' });
-      }
+      if (!pin || String(pin).length !== 6) return res.status(400).json({ error: 'PIN_LENGTH_ERR' });
+      const { data: prof } = await sb.from('profiles').select('pin_set').eq('id', user.id).single();
+      if (prof && prof.pin_set) return res.status(409).json({ error: 'PIN already exists. Please change or reset.' });
 
       const pin_hash = hashPin(pin);
       await sb.from('profiles').update({ pin_hash, pin_set: true }).eq('id', user.id).throwOnError();
-      await sendTelegram(`🔐 <b>PIN Updated</b>\n👤 ${user.email}`);
+      await sendTelegram(`🔐 <b>New PIN Set</b>\n👤 ${user.email}`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // 2. CHANGE: For updating an existing PIN (Requires Old PIN)
+    if (action === 'change') {
+      if (!pin || String(pin).length !== 6) return res.status(400).json({ error: 'PIN_LENGTH_ERR' });
+      if (!oldPin) return res.status(400).json({ error: 'OLD_PIN_REQUIRED' });
+
+      const { data: prof } = await sb.from('profiles').select('pin_set, pin_hash').eq('id', user.id).single();
+      if (!prof || !prof.pin_set) return res.status(400).json({ error: 'No PIN is currently set' });
+      if (!checkPin(oldPin, prof.pin_hash)) return res.status(401).json({ error: 'OLD_PIN_INVALID' });
+
+      const pin_hash = hashPin(pin);
+      await sb.from('profiles').update({ pin_hash, pin_set: true }).eq('id', user.id).throwOnError();
+      await sendTelegram(`🔐 <b>PIN Changed</b>\n👤 ${user.email}`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // 3. RESET: For recovering a forgotten PIN (Identity verified via Google Login)
+    if (action === 'reset') {
+      if (!pin || String(pin).length !== 6) return res.status(400).json({ error: 'PIN_LENGTH_ERR' });
+      const pin_hash = hashPin(pin);
+      await sb.from('profiles').update({ pin_hash, pin_set: true }).eq('id', user.id).throwOnError();
+      await sendTelegram(`🔐 <b>PIN Reset Successful</b>\n👤 ${user.email}`);
       return res.status(200).json({ ok: true });
     }
 
     if (action === 'verify') {
-      if (!pin) return res.status(400).json({ error: 'পিন দিন' });
+      if (!pin) return res.status(400).json({ error: 'Enter PIN' });
       const { data: prof } = await sb.from('profiles').select('pin_hash, pin_set').eq('id', user.id).single();
-      if (!prof || !prof.pin_set) return res.status(400).json({ error: 'কোনো পিন সেট করা নেই' });
+      if (!prof || !prof.pin_set) return res.status(400).json({ error: 'No PIN set' });
       const ok = checkPin(pin, prof.pin_hash);
-      if (!ok) return res.status(401).json({ error: 'ভুল পিন!' });
+      if (!ok) return res.status(401).json({ error: 'Incorrect PIN' });
       return res.status(200).json({ ok: true });
     }
 
