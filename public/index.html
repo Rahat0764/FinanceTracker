@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <!-- Fixed viewport to absolutely prevent random desktop mode switching on mobile -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
 <title>Vault | Fund Tracker</title>
 <meta name="theme-color" content="#060b09">
 <script>
@@ -25,8 +28,12 @@ tailwind.config = {
 </script>
 <style>
   :root { --focus-color: #12b76a; --focus-ring: rgba(18,183,106,0.4); }
-  * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-  html,body { background:#f1f5f9; min-height:100dvh; display:flex; flex-direction:column; transition: background .4s ease; overflow:hidden; }
+  * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; box-sizing: border-box; }
+  /* Lock text auto-boosting / auto-zoom that mobile Chrome sometimes applies after
+     an external redirect (Google OAuth) — this is the #1 cause of the page
+     suddenly looking "zoomed out like desktop" after login. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  html,body { background:#f1f5f9; min-height:100dvh; height:100dvh; width:100%; max-width:100vw; display:flex; flex-direction:column; transition: background .4s ease; overflow:hidden; overscroll-behavior:none; }
   html.dark, html.dark body { background:#0a0a0a; }
   body { font-family:'Inter',sans-serif; }
   .disp { font-family:'Sora',sans-serif; letter-spacing:-0.01em; }
@@ -39,6 +46,8 @@ tailwind.config = {
   .dyn-focus:focus { border-color: var(--focus-color) !important; box-shadow: 0 0 0 1.5px var(--focus-ring) !important; }
   .cut{ clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) }
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  /* iOS/Android: form inputs below 16px trigger an auto-zoom on focus. Force 16px on small screens. */
+  @media (max-width: 767px){ input, select, textarea { font-size: 16px !important; } }
   .fade-in{animation:fadeIn .4s cubic-bezier(.16,1,.3,1) forwards} @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   .pop-in{animation:popIn .35s cubic-bezier(.16,1,.3,1) forwards} @keyframes popIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
   .toast-in{animation:toastIn .3s ease-out forwards} @keyframes toastIn{from{opacity:0;transform:translateX(110%)}to{opacity:1;transform:translateX(0)}}
@@ -62,8 +71,9 @@ tailwind.config = {
     <h2 class="disp font-extrabold text-2xl tracking-tight text-slate-800 dark:text-white">Vault</h2>
     <div class="flex items-center gap-2 mt-2">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-vEmerald animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-      <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Database Loading</p>
+      <p id="bootStatusText" class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Database Loading</p>
     </div>
+    <button id="bootRetryBtn" onclick="window.location.reload()" class="hidden mt-3 text-[11px] font-bold text-vEmerald underline">Taking too long? Tap to retry</button>
   </div>
 </div>
 
@@ -101,16 +111,16 @@ window.lang = localStorage.getItem('vault_lang') || 'en';
 const LANG = {
   bn: {
     dashboard: "হোম", add: "এন্ট্রি", history: "হিস্ট্রি", manage: "ম্যানেজ", profile: "প্রোফাইল",
-    welcome: "স্বাগতম", days_left: "দিন বাকি", total_in: "মোট আয়", total_out: "মোট ব্যয়", balance: "ফান্ডে আছে",
+    welcome: "স্বাগতম", days_left: "দিন বাকি", total_in: "মোট আয়", total_out: "মোট ব্যয়", balance: "ফান্ডে আছে",
     recent: "সাম্প্রতিক লেনদেন", see_all: "সব দেখুন", no_txns: "এখনো কোনো এন্ট্রি নেই।",
-    new_entry: "নতুন এন্ট্রি", income: "আয়", expense: "ব্যয়",
-    amount_label: "পরিমাণ (৳)", where_label: "কোথায় আয়/ব্যয় হয়েছে?", note_label: "নোট (ঐচ্ছিক)", date_label: "তারিখ", save: "সেভ করুন",
+    new_entry: "নতুন এন্ট্রি", income: "আয়", expense: "ব্যয়",
+    amount_label: "পরিমাণ (৳)", where_label: "কোথায় আয়/ব্যয় হয়েছে?", note_label: "নোট (ঐচ্ছিক)", date_label: "তারিখ", save: "সেভ করুন",
     history_title: "সম্পূর্ণ হিস্ট্রি", search: "খুঁজুন...", all: "সব", del: "মুছুন",
     change_pin: "পিন পরিবর্তন করুন", danger: "বিপদজনক অঞ্চল", reset_all: "সম্পূর্ণ হিস্ট্রি রিসেট করুন",
     delete_account: "অ্যাকাউন্ট ও ডেটা ডিলিট করুন", logout: "লগআউট", lang_switch: "Switch to English", exit_admin: "অ্যাডমিন প্যানেল থেকে প্রস্থান",
-    save_success: "এন্ট্রি সেভ হয়েছে!", req_fields: "পরিমাণ ও উৎস দিন",
-    bulk_del_all: "সম্পূর্ণ হিস্ট্রি ডিলিট করুন", bulk_del_inc: "সকল আয় হিস্ট্রি ডিলিট করুন", bulk_del_exp: "সকল ব্যয় হিস্ট্রি ডিলিট করুন",
-    del_confirm_1: "ডিলিট কনফার্মেশন (১/২)", del_confirm_2: "চূড়ান্ত কনফার্মেশন (২/২)", enter_pin_cont: "চালিয়ে যেতে পিন দিন", enter_pin_perm: "স্থায়ীভাবে ডিলিট করতে আবার পিন দিন",
+    save_success: "এন্ট্রি সেভ হয়েছে!", req_fields: "পরিমাণ ও উৎস দিন",
+    bulk_del_all: "সম্পূর্ণ হিস্ট্রি ডিলিট করুন", bulk_del_inc: "সকল আয় হিস্ট্রি ডিলিট করুন", bulk_del_exp: "সকল ব্যয় হিস্ট্রি ডিলিট করুন",
+    del_confirm_1: "ডিলিট কনফার্মেশন (১/২)", del_confirm_2: "চূড়ান্ত কনফার্মেশন (২/২)", enter_pin_cont: "চালিয়ে যেতে পিন দিন", enter_pin_perm: "স্থায়ীভাবে ডিলিট করতে আবার পিন দিন",
     wrong_pin: "ভুল পিন!", pin_length_err: "৬ সংখ্যার পিন দিন", old_pin_err: "পুরাতন পিন সঠিক নয়", mismatch: "পিন মিলেনি!"
   },
   en: {
@@ -150,7 +160,7 @@ window.regState = { step: 1, email: '', otp: '', password: '' };
 window._regTimerLeft = 0; window._regTimer = null;
 
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
-const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
+const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
 const EN_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const EN_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -250,7 +260,13 @@ window.callApi = async (path, body) => {
 };
 window.notify = (event, details) => { if (window.session) window.callApi('/api/notify', { event, accessToken: window.session.access_token, details }).catch(()=>{}); };
 
-window.loginProvider = async (provider) => { window.showToast('Redirecting...', 'info'); await window.supa.auth.signInWithOAuth({ provider }); };
+// Always send the browser back to the SAME url (origin + path, no hash/query) it started from.
+// Without this, Supabase falls back to the dashboard "Site URL", which can silently land the
+// user on a different path/host than the one they were using, and is the most common cause
+// of "nothing happens" or a stuck screen after the Google/GitHub redirect.
+function currentRedirectUrl() { return window.location.origin + window.location.pathname; }
+
+window.loginProvider = async (provider) => { window.showToast('Redirecting...', 'info'); await window.supa.auth.signInWithOAuth({ provider, options: { redirectTo: currentRedirectUrl() } }); };
 window.loginEmail = async () => {
   const e = document.getElementById('auth-email').value; const p = document.getElementById('auth-pw').value;
   if(!e || !p) return window.showToast('Fill all fields', 'error');
@@ -354,9 +370,9 @@ window.switchAuthMode = (mode) => {
 
 function getDevCreditBar() {
   return `
-  <div class="w-full bg-[#101014] text-white border-b border-white/5 py-2.5 px-4 flex justify-center items-center gap-2 text-[11px] font-bold z-50 shadow-md">
+  <div class="w-full bg-[#101014] text-white border-b border-white/5 py-1.5 md:py-2.5 px-3 md:px-4 flex flex-wrap justify-center items-center gap-x-2 gap-y-0.5 text-[9px] md:text-[11px] font-bold z-50 shadow-md shrink-0">
     <span>Developed by <a href="${window.CFG?.developerLinkedin || '#'}" target="_blank" class="text-vEmerald hover:underline">Rahat</a></span>
-    <span class="opacity-40">&bull;</span>
+    <span class="opacity-40 hidden xs:inline">&bull;</span>
     <a href="${window.CFG?.developerGithub || '#'}" target="_blank" class="flex items-center gap-1.5 hover:text-slate-300 transition-colors">
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
       GitHub
@@ -368,15 +384,15 @@ function buildLandingDesktopWrapper() {
   return `
   <div class="flex-1 w-full h-full flex flex-col relative bg-[#f1f5f9] dark:bg-[#0a0a0a] overflow-hidden">
     ${getDevCreditBar()}
-    <div class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-10 lg:gap-20 px-6 py-10 max-w-6xl mx-auto w-full z-10 overflow-y-auto">
-      
-      <div class="lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left fade-in">
+    <div class="flex-1 flex flex-col lg:flex-row items-center lg:items-center gap-10 lg:gap-20 px-6 py-8 max-w-6xl mx-auto w-full z-10 overflow-y-auto hide-scrollbar">
+
+      <div class="lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left fade-in m-auto shrink-0">
         <div class="w-20 h-20 md:w-28 md:h-28 rounded-[28px] md:rounded-[36px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-6 border-[3px] border-white dark:border-[#141414]"><i data-lucide="vault" class="w-10 h-10 md:w-14 md:h-14 text-[#04150c]"></i></div>
         <h1 class="disp text-5xl md:text-6xl lg:text-[72px] font-extrabold mb-4 tracking-tight text-slate-800 dark:text-white leading-none">Vault</h1>
         <p class="text-lg md:text-xl text-slate-500 dark:text-slate-400 font-medium max-w-md">The most secure and private way to track your personal finances.</p>
       </div>
 
-      <div class="w-full max-w-[420px] shrink-0 fade-in pop-in pb-10">
+      <div class="w-full max-w-[420px] shrink-0 fade-in pop-in m-auto">
         ${buildLandingForm()}
       </div>
     </div>
@@ -984,7 +1000,7 @@ window.confirmDeleteWithProvider = async (provider) => {
   window.hideModal();
   localStorage.setItem('vault_pending_delete', window.session.user.id);
   window.showToast('Redirecting securely...', 'info');
-  await window.supa.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin + window.location.pathname } });
+  await window.supa.auth.signInWithOAuth({ provider, options: { redirectTo: currentRedirectUrl() } });
 };
 
 window.confirmDeleteAndLogout = async () => {
@@ -1137,27 +1153,45 @@ function hideBoot() {
   }
 }
 
+// =========================================================
+// FIXED BOOT SEQUENCE
+// Root cause of "stuck on Database Loading, then bounced back to login":
+// the old code called `await supa.auth.getSession()` BEFORE registering
+// `onAuthStateChange`. supabase-js resolves the OAuth redirect (#access_token
+// in the URL) asynchronously as soon as the client is created — if that
+// resolution finishes before the listener is attached, the SIGNED_IN event
+// is fired into the void and never received, so the app just sits on the
+// boot screen until the 7.5s timeout fires and dumps the user back to login.
+//
+// Fix: attach onAuthStateChange FIRST (supabase-js always replays the
+// current/incoming session to a listener registered right after client
+// creation, including the very first 'INITIAL_SESSION' event), and drive
+// the entire boot flow from that single listener instead of a separate
+// getSession() call.
+// =========================================================
 async function boot(){
-  const isRedirect = window.location.hash.includes('access_token') || window.location.search.includes('code=');
+  const bootRetryBtn = document.getElementById('bootRetryBtn');
+  const bootStatusText = document.getElementById('bootStatusText');
 
   const ultimateTimeout = setTimeout(() => {
-    hideBoot();
-    if (!window.session) window.render(); 
-  }, 7500);
+    // Don't silently bounce back to login — tell the user what happened
+    // and let them retry, instead of losing their login attempt silently.
+    if (bootStatusText) bootStatusText.innerText = 'Taking longer than usual...';
+    if (bootRetryBtn) bootRetryBtn.classList.remove('hidden');
+  }, 9000);
 
   try {
     const cfgRes = await fetch('/api/config');
     if(!cfgRes.ok) throw new Error('Config load failed');
     window.CFG = await cfgRes.json();
     window.supa = createClient(window.CFG.supabaseUrl, window.CFG.supabaseAnonKey);
-    
-    const { data: { session } } = await window.supa.auth.getSession(); 
-    window.session = session;
-    
+
+    let firstEventHandled = false;
+
     window.supa.auth.onAuthStateChange(async (event, s) => {
       window.session = s;
       const pendingDelId = localStorage.getItem('vault_pending_delete');
-      
+
       // ==========================================================
       // AUTOMATIC DELETION ON OAUTH RETURN
       // ==========================================================
@@ -1176,7 +1210,8 @@ async function boot(){
           await window.supa.auth.signOut();
           document.getElementById('del-overlay')?.remove(); 
           window.session = null; window.profile = null; window._pinVerified = false; 
-          window.render(); 
+          clearTimeout(ultimateTimeout); hideBoot(); window.render();
+          firstEventHandled = true;
           return;
         } else { 
           localStorage.removeItem('vault_pending_delete'); 
@@ -1188,14 +1223,25 @@ async function boot(){
         if (window.location.hash || window.location.search) window.history.replaceState(null, '', window.location.pathname);
       }
       clearTimeout(ultimateTimeout); hideBoot(); window.render();
+      firstEventHandled = true;
     });
-    
-    if (!isRedirect) {
-      if (session) await Promise.all([window.loadProfile(), window.loadTxns()]);
-      clearTimeout(ultimateTimeout); hideBoot(); window.render();
-    }
-    
-    if (window.activeTab === 'add') setTimeout(()=>window.setEntryType('income'), 60);
+
+    // Safety net: on some browsers the very first auth event can be delayed by
+    // a beat longer than expected (slow network on the token exchange). If we
+    // haven't heard anything after 3s, ask directly instead of waiting blind.
+    setTimeout(async () => {
+      if (firstEventHandled) return;
+      try {
+        const { data: { session } } = await window.supa.auth.getSession();
+        if (session && !window.session) {
+          window.session = session;
+          await Promise.all([window.loadProfile(), window.loadTxns()]);
+          clearTimeout(ultimateTimeout); hideBoot(); window.render();
+          firstEventHandled = true;
+        }
+      } catch(e) {}
+    }, 3000);
+
   } catch(e) { 
     clearTimeout(ultimateTimeout); hideBoot();
     document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><p class="text-sm text-slate-500 mb-4">Network error. Please try again.</p><button onclick="window.location.reload()" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold">Reload App</button></div>`;
