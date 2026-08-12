@@ -31,6 +31,9 @@
     localStorage.removeItem('vault_admin_token');
     localStorage.removeItem('vault_pending_delete');
     localStorage.removeItem('vault_pending_pin_reset');
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('vault_pin_verified_')) localStorage.removeItem(key);
+    });
   }
 </script>
 <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
@@ -412,6 +415,7 @@ window.switchAccount = async () => {
 window.logout = window.switchAccount;
 window.exitAdmin = () => { window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.changeTab('dashboard'); };
 
+// FIX: Load profile with solid fallback to backend API status check
 window.loadProfile = async () => {
   const session = window.session;
   if (!session?.user?.id) return false;
@@ -427,10 +431,14 @@ window.loadProfile = async () => {
       if (window.session?.user?.id === userId) window.profile = data;
       return true;
     }
-    window.profile = { id: userId, full_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'User', email: session.user.email || '', avatar_url: session.user.user_metadata?.avatar_url || '', pin_set: false, is_suspended: false, suspend_reason: null };
+    // If DB row missing (trigger delay), explicitly check PIN status via API
+    const st = await window.callApi('/api/pin', { action: 'status', accessToken: session.access_token }).catch(()=>({pin_set:false, is_suspended:false}));
+    window.profile = { id: userId, full_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'User', email: session.user.email || '', avatar_url: session.user.user_metadata?.avatar_url || '', pin_set: st.pin_set, is_suspended: st.is_suspended, suspend_reason: null };
     return true;
   } catch(e) { 
-    window.profile = { id: userId, full_name: session.user.user_metadata?.full_name || 'User', email: session.user.email || '', avatar_url: session.user.user_metadata?.avatar_url || '', pin_set: false, is_suspended: false, suspend_reason: null };
+    // Fallback if timeout happens
+    const st = await window.callApi('/api/pin', { action: 'status', accessToken: session.access_token }).catch(()=>({pin_set:false, is_suspended:false}));
+    window.profile = { id: userId, full_name: session.user.user_metadata?.full_name || 'User', email: session.user.email || '', avatar_url: session.user.user_metadata?.avatar_url || '', pin_set: st.pin_set, is_suspended: st.is_suspended, suspend_reason: null };
     return true; 
   }
 };
@@ -459,7 +467,6 @@ window.loadTxns = async (silent = false) => {
   }
 };
 
-// FIX: New Account Bar for Loading & PIN Screen
 function getAccountBar() {
   const p = window.profile || {};
   const s = window.session;
@@ -482,7 +489,6 @@ function getAccountBar() {
   `;
 }
 
-// FIX: Pure render, no side-effects
 window.render = () => {
   const root = document.getElementById('root');
   if (!window.session) { root.innerHTML = buildLandingDesktopWrapper(); lucide.createIcons(); return; }
@@ -532,7 +538,6 @@ function getDevCreditBar() {
   </div>`;
 }
 
-// FIX: Perfectly Responsive Landing Page - Flex structure prevents cutoff & pushes footer to bottom
 function buildLandingDesktopWrapper() {
   return `
   <div class="flex-1 w-full flex flex-col justify-between relative bg-[#f1f5f9] dark:bg-[#0a0a0a] min-h-[100dvh]">
@@ -648,7 +653,6 @@ function buildSuspended(){
   </div>`;
 }
 
-// FIX: Added 'h-[100dvh]' outer shell constraint so inner main block smoothly scrolls on mobile
 function buildShell(innerHtml){
   const p = window.profile || {}; const isSuper = window.adminToken;
   const navItems = [
@@ -1067,11 +1071,16 @@ function buildProfile(){
   `;
 }
 
-// FIX: New Accounts -> isReset=false. Forgot PIN -> isReset=true.
+// FIX: Prevent PIN setup if already exists & Auto save state to LocalStorage
 window.forceSetPin = async (isReset = false) => {
   if (window._pinFlowActive) return;
-  // If not resetting and pin is already set, abort UI popup.
-  if (!isReset && window.profile?.pin_set) { window._pinVerified = true; window.render(); return; } 
+  // If not resetting and pin is already set, abort UI popup and save state.
+  if (!isReset && window.profile?.pin_set) { 
+    window._pinVerified = true; 
+    localStorage.setItem('vault_pin_verified_' + window.session.user.id, 'true');
+    window.render(); 
+    return; 
+  } 
   
   window._pinFlowActive = true;
   try {
@@ -1083,15 +1092,22 @@ window.forceSetPin = async (isReset = false) => {
     if (p1 !== p2) { window.showToast(_t('mismatch'), 'error'); return; }
     
     window.showToast(_t('setting_pin'), 'info');
-    // Important: send correct action based on if it's a reset or brand new setup
     await window.callApi('/api/pin', { action: isReset ? 'reset' : 'set', pin: p1, accessToken: window.session.access_token });
     
     if(window.profile) window.profile.pin_set = true;
     window._pinVerified = true;
+    localStorage.setItem('vault_pin_verified_' + window.session.user.id, 'true');
     window.showToast(_t('pin_set_success'), 'success');
     window.render();
   } catch(e) { 
-    if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
+    // Fallback: If DB already has the PIN but client missed it, seamlessly switch UI
+    if (e.message && e.message.includes('PIN already exists')) {
+      if (window.profile) window.profile.pin_set = true;
+      window.showToast('PIN exists! Switching to unlock vault...', 'info');
+      window.render();
+    } else if (e.message !== 'cancelled') {
+      window.showToast(translateErr(e.message), 'error'); 
+    }
   } finally {
     window._pinFlowActive = false;
   }
@@ -1104,7 +1120,9 @@ window.verifyPinAccess = async () => {
     const pin = await window.askPin('Enter PIN', 'Unlock Vault', true);
     if(!pin) return;
     await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
+    
     window._pinVerified = true; 
+    localStorage.setItem('vault_pin_verified_' + window.session.user.id, 'true');
     window.render();
   } catch(e) { 
     if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
@@ -1127,6 +1145,9 @@ window.changePin = async () => {
     if (p1 !== p2) { window.showToast(_t('mismatch'), 'error'); return; }
     window.showToast(_t('updating'), 'info');
     await window.callApi('/api/pin', { action:'change', pin:p1, oldPin, accessToken: window.session.access_token }); 
+    
+    window._pinVerified = true;
+    localStorage.setItem('vault_pin_verified_' + window.session.user.id, 'true');
     window.showToast('PIN Changed');
   } catch(e) { 
     if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
@@ -1400,7 +1421,9 @@ async function boot() {
       return;
     }
 
+    // Initialize session & checking remembered PIN status
     window.session = session;
+    window._pinVerified = localStorage.getItem('vault_pin_verified_' + session.user.id) === 'true';
     
     const pendingDelId = localStorage.getItem('vault_pending_delete');
     if (pendingDelId && session.user.id === pendingDelId) {
@@ -1418,6 +1441,8 @@ async function boot() {
     const pendingResetId = localStorage.getItem('vault_pending_pin_reset');
     if (pendingResetId && session.user.id === pendingResetId) {
       localStorage.removeItem('vault_pending_pin_reset');
+      localStorage.removeItem('vault_pin_verified_' + session.user.id); // clear verify state
+      
       if (bootFinished) return;
       if (window.location.hash || window.location.search) { window.history.replaceState(null, '', window.location.pathname); }
       
