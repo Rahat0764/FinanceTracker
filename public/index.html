@@ -174,6 +174,7 @@ window.withTimeout = (promise, ms, errorMsg = 'Request timed out') => {
   ]);
 };
 
+// Application State Variables
 window.supa = null; window.session = null; window.profile = null;
 window.adminToken = localStorage.getItem('vault_admin_token') || null;
 window.activeTab = localStorage.getItem('vault_tab') || 'dashboard';
@@ -182,6 +183,8 @@ window.authMode = 'login';
 window.regState = { step: 1, email: '', otp: '', password: '' };
 window._regTimerLeft = 0; window._regTimer = null;
 window.isTxnLoading = false;
+window._pinVerified = false;
+window._pinFlowActive = false; // Security lock to prevent multiple PIN modals
 
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
 const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
@@ -344,8 +347,9 @@ window.setRegPassword = async () => {
   window.showToast('Account Created Successfully!'); window.render();
 };
 
-// FIX: Safely handled session reset without race conditions
+// FIX: Reset lock securely
 window.switchAccount = async () => {
+  window._pinFlowActive = false; // Important fix
   window.session = null;
   window.profile = null;
   window.txns = [];
@@ -373,14 +377,12 @@ window.switchAccount = async () => {
 window.logout = window.switchAccount;
 window.exitAdmin = () => { window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.changeTab('dashboard'); };
 
-// FIX: Extremely Resilient Profile Loader (will NEVER brick the app)
 window.loadProfile = async () => {
   const session = window.session;
   if (!session?.user?.id) return false;
   const userId = session.user.id;
   
   try {
-    // using maybeSingle() so missing row doesn't throw immediate fatal error
     const { data, error } = await window.withTimeout(
       window.supa.from('profiles').select('*').eq('id', userId).maybeSingle(),
       5000, 'Profile request timed out'
@@ -393,7 +395,6 @@ window.loadProfile = async () => {
       return true;
     }
     
-    // Profile row missing in DB! Fallback to auth metadata so app still opens
     console.warn('Profile row missing, falling back to auth metadata');
     window.profile = {
       id: userId,
@@ -406,7 +407,6 @@ window.loadProfile = async () => {
     
   } catch(e) { 
     console.error('Profile load fail (Network/Timeout):', e); 
-    // Fallback on network error so the app doesn't show "Couldn't load account" lock screen
     window.profile = {
       id: userId,
       full_name: session.user.user_metadata?.full_name || 'User',
@@ -414,7 +414,7 @@ window.loadProfile = async () => {
       avatar_url: session.user.user_metadata?.avatar_url || '',
       pin_set: false, is_suspended: false, suspend_reason: null
     };
-    return true; // Force True!
+    return true; 
   }
 };
 
@@ -444,14 +444,30 @@ window.loadTxns = async (silent = false) => {
   }
 };
 
+// FIX: Pure render function with absolutely no side effects
 window.render = () => {
   const root = document.getElementById('root');
   if (!window.session) { root.innerHTML = buildLandingDesktopWrapper(); lucide.createIcons(); return; }
   if (window.profile && window.profile.is_suspended) { root.innerHTML = buildSuspended(); lucide.createIcons(); return; }
-  if (window.profile && !window.profile.pin_set) { root.innerHTML = buildShell(''); lucide.createIcons(); setTimeout(forceSetPin, 300); return; }
   
-  if(window.profile && window.profile.pin_set && !window._pinVerified) {
-    root.innerHTML = buildShell(''); lucide.createIcons(); setTimeout(verifyPinAccess, 300); return;
+  // Security Layer UI (Prevents loop, handles lock state purely via UI)
+  if (window.profile && (!window.profile.pin_set || !window._pinVerified)) {
+    root.innerHTML = `
+      <div class="flex flex-col items-center justify-center h-full w-full bg-[#f1f5f9] dark:bg-[#0a0a0a]">
+        <div class="w-20 h-20 bg-vEmerald/10 text-vEmerald rounded-full flex items-center justify-center mb-6 border border-vEmerald/20 shadow-[0_0_15px_rgba(18,183,106,0.2)]">
+          <i data-lucide="lock" class="w-10 h-10"></i>
+        </div>
+        <h2 class="disp text-3xl font-extrabold mb-2 tracking-tight">Vault Locked</h2>
+        <p class="text-sm text-slate-500 mb-8 font-medium text-center px-6">Please verify your identity to securely access your funds.</p>
+        <button onclick="${!window.profile.pin_set ? 'window.forceSetPin()' : 'window.verifyPinAccess()'}" class="py-4 px-10 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20 active:scale-95 transition-all text-[15px] flex items-center gap-3">
+          <i data-lucide="${!window.profile.pin_set ? 'key-round' : 'unlock'}" class="w-5 h-5"></i>
+          ${!window.profile.pin_set ? 'Setup Security PIN' : 'Unlock Vault'}
+        </button>
+        <button onclick="window.switchAccount()" class="mt-8 text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">Logout / Switch Account</button>
+      </div>
+    `;
+    lucide.createIcons();
+    return;
   }
   
   root.innerHTML = buildShell(buildTabContent());
@@ -1002,59 +1018,92 @@ function buildProfile(){
   `;
 }
 
-async function forceSetPin(){
+// FIX: Bulletproof Security Flow Controllers (No more infinite loops!)
+window.forceSetPin = async () => {
+  if (window._pinFlowActive) return;
+  window._pinFlowActive = true;
   try {
     const p1 = await window.askPin('Set Security PIN', 'Create a 6-digit PIN');
     const p2 = await window.askPin('Confirm PIN', 'Enter the same PIN again');
-    if (p1 !== p2) { window.showToast(_t('mismatch'), 'error'); return setTimeout(forceSetPin, 400); }
+    
+    if (p1 !== p2) { window.showToast(_t('mismatch'), 'error'); return; }
+    
     window.showToast('Setting PIN...', 'info');
     await window.callApi('/api/pin', { action:'set', pin:p1, accessToken: window.session.access_token });
-    window._pinVerified = true; await window.loadProfile(); window.showToast('PIN Set!'); window.render();
-  } catch(e){ setTimeout(forceSetPin, 400); }
-}
+    
+    window.profile.pin_set = true;
+    window._pinVerified = true;
+    window.showToast('PIN Set!', 'success');
+    window.render();
+  } catch(e) { 
+    if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
+  } finally {
+    window._pinFlowActive = false;
+  }
+};
 
-async function verifyPinAccess(){
+window.verifyPinAccess = async () => {
+  if (window._pinFlowActive) return;
+  window._pinFlowActive = true;
   try {
     const pin = await window.askPin('Enter PIN', 'Unlock Vault', true);
     await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
-    window._pinVerified = true; window.render();
+    window._pinVerified = true; 
+    window.render();
   } catch(e) { 
-    if(e.message !== 'cancelled') { window.showToast(translateErr(e.message), 'error'); setTimeout(verifyPinAccess, 400); }
+    if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
+  } finally {
+    window._pinFlowActive = false;
   }
-}
+};
 
 window.changePin = async () => {
+  if (window._pinFlowActive) return;
+  window._pinFlowActive = true;
   try {
     const oldPin = await window.askPin('Enter Old PIN');
     const p1 = await window.askPin('Enter New PIN'); 
     const p2 = await window.askPin('Confirm New PIN');
-    if (p1 !== p2) return window.showToast(_t('mismatch'), 'error');
+    if (p1 !== p2) { window.showToast(_t('mismatch'), 'error'); return; }
     window.showToast('Updating PIN...', 'info');
-    await window.callApi('/api/pin', { action:'set', pin:p1, oldPin, accessToken: window.session.access_token }); window.showToast('PIN Changed');
-  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
+    await window.callApi('/api/pin', { action:'set', pin:p1, oldPin, accessToken: window.session.access_token }); 
+    window.showToast('PIN Changed');
+  } catch(e) { 
+    if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
+  } finally {
+    window._pinFlowActive = false;
+  }
 };
 
 window.fullReset = async () => {
+  if (window._pinFlowActive) return;
+  window._pinFlowActive = true;
   try {
     const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); 
     const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
-    if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
+    if(pin1 !== pin2) { window.showToast(_t('mismatch'), 'error'); return; }
     window.showToast('Verifying...', 'info');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
     await window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
     window.showToast('History Wiped'); await window.loadTxns(); window.render();
-  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
+  } catch(e) { 
+    if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
+  } finally {
+    window._pinFlowActive = false;
+  }
 };
 
 // =========================================================
 // Account Deletion Flow
 // =========================================================
 window.reqDeleteAccount = async () => {
+  if (window._pinFlowActive) return;
+  window._pinFlowActive = true;
   try {
     const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); 
     const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
     
-    if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
+    if(pin1 !== pin2) { window.showToast(_t('mismatch'), 'error'); return; }
     window.showToast('Verifying PIN...', 'info');
     
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
@@ -1092,7 +1141,11 @@ window.reqDeleteAccount = async () => {
       </div>
     `);
 
-  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
+  } catch(e) { 
+    if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); 
+  } finally {
+    window._pinFlowActive = false;
+  }
 };
 
 window.confirmDeleteWithProvider = async (provider) => {
@@ -1293,9 +1346,7 @@ async function boot() {
       finishBoot(); return;
     }
 
-    // -----------------------------------------
-    // Load profile (This will NEVER fail now)
-    // -----------------------------------------
+    // Load profile
     await window.loadProfile();
     if (bootFinished) return;
 
@@ -1303,23 +1354,30 @@ async function boot() {
       window.history.replaceState(null, '', window.location.pathname);
     }
 
-    // App is fully usable at this exact point
+    // App is fully usable at this point
     finishBoot();
+    
+    // ONE-TIME ONLY Auto-Trigger logic for the PIN Modal (so it pops up nicely at start)
+    setTimeout(() => {
+      if (window.profile && !window.profile.pin_set) {
+        window.forceSetPin();
+      } else if (window.profile && !window._pinVerified) {
+        window.verifyPinAccess();
+      }
+    }, 150);
 
-    // Transactions load transparently in background
+    // Background Loading
     window.loadTxns(true);
   };
 
   try {
     if (bootStatusText) bootStatusText.innerText = 'Connecting';
     
-    // Fallback UI if it takes longer than 6s
     window.ultimateTimeout = setTimeout(() => {
       if (bootStatusText) bootStatusText.innerText = 'Taking longer than usual...';
       if (bootRetryBtn) bootRetryBtn.classList.remove('hidden');
     }, 6000); 
 
-    // Fetch config
     const cfgRes = await window.withTimeout(fetch('/api/config', { cache: 'no-store' }), 6000, 'Config fetch timeout');
     if (!cfgRes.ok) throw new Error(`Config HTTP ${cfgRes.status}`);
     window.CFG = await cfgRes.json();
