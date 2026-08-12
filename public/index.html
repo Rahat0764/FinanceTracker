@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<!-- Fixed viewport to absolutely prevent random desktop mode switching on mobile -->
+<!-- Completely locked viewport to prevent random desktop mode switching on mobile -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -29,9 +29,6 @@ tailwind.config = {
 <style>
   :root { --focus-color: #12b76a; --focus-ring: rgba(18,183,106,0.4); }
   * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; box-sizing: border-box; }
-  /* Lock text auto-boosting / auto-zoom that mobile Chrome sometimes applies after
-     an external redirect (Google OAuth) — this is the #1 cause of the page
-     suddenly looking "zoomed out like desktop" after login. */
   html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   html,body { background:#f1f5f9; min-height:100dvh; height:100dvh; width:100%; max-width:100vw; display:flex; flex-direction:column; transition: background .4s ease; overflow:hidden; overscroll-behavior:none; }
   html.dark, html.dark body { background:#0a0a0a; }
@@ -46,7 +43,6 @@ tailwind.config = {
   .dyn-focus:focus { border-color: var(--focus-color) !important; box-shadow: 0 0 0 1.5px var(--focus-ring) !important; }
   .cut{ clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) }
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-  /* iOS/Android: form inputs below 16px trigger an auto-zoom on focus. Force 16px on small screens. */
   @media (max-width: 767px){ input, select, textarea { font-size: 16px !important; } }
   .fade-in{animation:fadeIn .4s cubic-bezier(.16,1,.3,1) forwards} @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   .pop-in{animation:popIn .35s cubic-bezier(.16,1,.3,1) forwards} @keyframes popIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
@@ -71,9 +67,14 @@ tailwind.config = {
     <h2 class="disp font-extrabold text-2xl tracking-tight text-slate-800 dark:text-white">Vault</h2>
     <div class="flex items-center gap-2 mt-2">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-vEmerald animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-      <p id="bootStatusText" class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Database Loading</p>
+      <p id="bootStatusText" class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Starting Vault</p>
     </div>
-    <button id="bootRetryBtn" onclick="window.location.reload()" class="hidden mt-3 text-[11px] font-bold text-vEmerald underline">Taking too long? Tap to retry</button>
+    
+    <!-- Fix: Boot screen Switch Account + Retry -->
+    <div class="flex items-center gap-3 mt-4">
+      <button id="bootRetryBtn" onclick="window.location.reload()" class="hidden text-[11px] font-bold text-vEmerald underline">Retry</button>
+      <button onclick="window.switchAccount()" class="px-4 py-2 rounded-xl bg-white/70 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm z-50 transition-transform active:scale-95">Switch Account</button>
+    </div>
   </div>
 </div>
 
@@ -158,6 +159,8 @@ window.txns = []; window.feedbackList = []; window.CFG = {}; window.logoTapCount
 window.authMode = 'login'; 
 window.regState = { step: 1, email: '', otp: '', password: '' };
 window._regTimerLeft = 0; window._regTimer = null;
+window._bootCancelled = false; // Prevent race conditions
+window.isTxnLoading = false;
 
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
 const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
@@ -249,7 +252,7 @@ document.addEventListener('keydown', window.handlePinKeydown);
 window.forgotPin = async () => {
   document.getElementById('pinContainer').classList.add('hidden');
   window.showToast('Please log in again to verify identity.', 'info');
-  await window.logout();
+  await window.switchAccount();
 };
 
 window.callApi = async (path, body) => {
@@ -260,10 +263,6 @@ window.callApi = async (path, body) => {
 };
 window.notify = (event, details) => { if (window.session) window.callApi('/api/notify', { event, accessToken: window.session.access_token, details }).catch(()=>{}); };
 
-// Always send the browser back to the SAME url (origin + path, no hash/query) it started from.
-// Without this, Supabase falls back to the dashboard "Site URL", which can silently land the
-// user on a different path/host than the one they were using, and is the most common cause
-// of "nothing happens" or a stuck screen after the Google/GitHub redirect.
 function currentRedirectUrl() { return window.location.origin + window.location.pathname; }
 
 window.loginProvider = async (provider) => { window.showToast('Redirecting...', 'info'); await window.supa.auth.signInWithOAuth({ provider, options: { redirectTo: currentRedirectUrl() } }); };
@@ -324,28 +323,65 @@ window.setRegPassword = async () => {
   window.showToast('Account Created Successfully!'); window.render();
 };
 
-window.logout = async () => { await window.supa.auth.signOut(); window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.profile = null; window.session = null; window.render(); };
+// Fix: switchAccount function added to cleanly wipe everything and redirect to login
+window.switchAccount = async () => {
+  window._bootCancelled = true;
+  window._pinVerified = false;
+  window.session = null;
+  window.profile = null;
+  window.txns = [];
+  window.adminToken = null;
+  localStorage.removeItem('vault_admin_token');
+  try { if (window.supa) await window.supa.auth.signOut(); } catch (e) { console.warn(e); }
+  if (typeof window.ultimateTimeout !== 'undefined') clearTimeout(window.ultimateTimeout);
+  hideBoot();
+  window.render();
+};
+window.logout = window.switchAccount;
 window.exitAdmin = () => { window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.changeTab('dashboard'); };
 
+// Fix: Much faster Profile load retry logic
 window.loadProfile = async (retry = 0) => {
   try {
+    if (!window.session?.user?.id) return false;
     const { data, error } = await window.supa.from('profiles').select('*').eq('id', window.session.user.id).single();
     if(error) throw error; 
     window.profile = data;
+    return true;
   } catch(e) { 
-    if(retry < 3) {
-      await new Promise(r => setTimeout(r, 800));
+    if(retry < 2) {
+      await new Promise(r => setTimeout(r, 250));
       return window.loadProfile(retry + 1);
     }
-    console.error(e); 
+    console.error('Profile load failed:', e); 
+    return false;
   }
 };
 
-window.loadTxns = async () => {
+// Fix: Background friendly loadTxns. Re-renders UI silently when data arrives.
+window.loadTxns = async (silent = false) => {
   try {
-    const { data, error } = await window.supa.from('transactions').select('*').eq('user_id', window.session.user.id).order('txn_date', { ascending:false }).order('created_at', { ascending:false });
-    if(error) throw error; window.txns = data || [];
-  } catch(e) { window.showToast(translateErr(e.message), 'error'); }
+    if (!window.session?.user?.id) return false;
+    window.isTxnLoading = true;
+    if (window.session) window.render();
+
+    const { data, error } = await window.supa.from('transactions')
+      .select('*')
+      .eq('user_id', window.session.user.id)
+      .order('txn_date', { ascending:false })
+      .order('created_at', { ascending:false });
+      
+    if(error) throw error; 
+    window.txns = data || [];
+    window.isTxnLoading = false;
+    if (window.session) window.render();
+    return true;
+  } catch(e) { 
+    window.isTxnLoading = false;
+    if (!silent) window.showToast(translateErr(e.message), 'error'); 
+    if (window.session) window.render();
+    return false;
+  }
 };
 
 window.render = () => {
@@ -368,6 +404,7 @@ window.switchAuthMode = (mode) => {
   window.render(); 
 };
 
+// Fix: Developer Credit bar perfectly positioned directly under the header on mobile
 function getDevCreditBar() {
   return `
   <div class="w-full bg-[#101014] text-white border-b border-white/5 py-1.5 md:py-2.5 px-3 md:px-4 flex flex-wrap justify-center items-center gap-x-2 gap-y-0.5 text-[9px] md:text-[11px] font-bold z-50 shadow-md shrink-0">
@@ -392,7 +429,7 @@ function buildLandingDesktopWrapper() {
         <p class="text-lg md:text-xl text-slate-500 dark:text-slate-400 font-medium max-w-md">The most secure and private way to track your personal finances.</p>
       </div>
 
-      <div class="w-full max-w-[420px] shrink-0 fade-in pop-in m-auto">
+      <div class="w-full max-w-[420px] shrink-0 fade-in pop-in m-auto pb-6">
         ${buildLandingForm()}
       </div>
     </div>
@@ -484,7 +521,7 @@ function buildSuspended(){
     <div class="w-16 h-16 rounded-full bg-vRose/10 text-vRose flex items-center justify-center mb-5 border border-vRose/20"><i data-lucide="shield-off" class="w-8 h-8"></i></div>
     <h2 class="disp text-2xl font-bold mb-2">Account Suspended</h2>
     <p class="text-sm text-slate-500 max-w-xs mb-8">${window.profile.suspend_reason || 'Violation of terms.'}</p>
-    <button type="button" onclick="window.logout()" class="py-3.5 px-8 glass-input rounded-2xl font-bold shadow-sm">Logout</button>
+    <button type="button" onclick="window.switchAccount()" class="py-3.5 px-8 glass-input rounded-2xl font-bold shadow-sm">Logout</button>
   </div>`;
 }
 
@@ -537,7 +574,7 @@ function buildShell(innerHtml){
 
       ${getDevCreditBar()}
       
-      <main class="flex-1 overflow-y-auto w-full pb-28 md:pb-10 pt-4 px-4 md:px-8 fade-in hide-scrollbar">
+      <main class="flex-1 overflow-y-auto w-full pb-28 md:pb-10 pt-4 px-4 md:px-8 fade-in hide-scrollbar relative">
         <div class="max-w-4xl mx-auto">${innerHtml}</div>
       </main>
 
@@ -629,7 +666,9 @@ function buildDashboard(){
       <button type="button" onclick="window.changeTab('history')" class="text-[11px] font-bold text-vEmerald hover:underline">${_t('see_all')}</button>
     </div>
     <div class="divide-y divide-slate-100/50 dark:divide-white/5">
-      ${window.txns.slice(0,5).map(txnRow).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`}
+      ${window.isTxnLoading && window.txns.length === 0 
+        ? `<div class="p-10 text-center text-slate-500 text-sm font-medium"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto mb-2"></i>Loading data...</div>` 
+        : (window.txns.slice(0,5).map(txnRow).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`)}
     </div>
   </div>`;
 }
@@ -729,7 +768,9 @@ function buildHistory(){
   </div>
   <div class="glass rounded-[24px] overflow-hidden shadow-sm">
     <div class="divide-y divide-slate-100/50 dark:divide-white/5">
-      ${list.map(t=> `<div class="p-4 flex items-center gap-3">
+      ${window.isTxnLoading && window.txns.length === 0 
+        ? `<div class="p-10 text-center text-slate-500 text-sm font-medium"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto mb-2"></i>Loading history...</div>` 
+        : (list.map(t=> `<div class="p-4 flex items-center gap-3">
         <div class="w-10 h-10 rounded-2xl ${t.type==='income'?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0 shadow-sm"><i data-lucide="${t.type==='income'?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
         <div class="min-w-0 flex-1">
           <p class="text-[13px] font-bold truncate">${t.category}</p>
@@ -740,7 +781,7 @@ function buildHistory(){
           <span class="font-bold disp block tracking-tight text-sm ${t.type==='income'?'text-vEmerald':'text-vRose'}">${t.type==='income'?'+':'-'}৳ ${bnNum(t.amount)}</span>
           <button type="button" onclick="window.deleteTxn('${t.id}')" class="text-[10px] text-slate-400 hover:text-vRose font-bold mt-1.5 transition-colors">${_t('del')}</button>
         </div>
-      </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`}
+      </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">${_t('no_txns')}</div>`)}
     </div>
     ${list.length > 0 ? `
     <div class="p-4 border-t border-slate-100/50 dark:border-white/5 flex justify-center bg-white/10 dark:bg-black/10">
@@ -754,9 +795,9 @@ function buildHistory(){
 window.deleteTxn = async (id) => {
   try {
     const pin = await window.askPin('Confirm Delete', 'Enter PIN to delete');
-    window.showToast('Verifying...', 'info');
+    window.showToast('Verifying PIN...', 'info');
     await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
-    await window.supa.from('transactions').delete().eq('id', id); window.showToast('Deleted'); await window.loadTxns(); window.render();
+    await window.supa.from('transactions').delete().eq('id', id); window.showToast('Deleted!'); await window.loadTxns(); window.render();
   } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
 };
 
@@ -765,10 +806,10 @@ window.bulkDeleteTxn = async (type) => {
     const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); 
     const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
     if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
-    window.showToast('Verifying...', 'info');
+    window.showToast('Verifying PIN...', 'info');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
     let query = window.supa.from('transactions').delete().eq('user_id', window.session.user.id); if (type !== 'all') query = query.eq('type', type);
-    await query; window.showToast('Deleted'); await window.loadTxns(); window.render();
+    await query; window.showToast('Deleted!'); await window.loadTxns(); window.render();
   } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
 };
 
@@ -897,7 +938,7 @@ function buildProfile(){
     </div>
   </div>
   
-  <button type="button" onclick="window.logout()" class="w-full py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 mb-6 shadow-lg active:scale-[0.98] transition-all"><i data-lucide="log-out" class="w-4 h-4"></i> ${_t('logout')}</button>
+  <button type="button" onclick="window.switchAccount()" class="w-full py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 mb-6 shadow-lg active:scale-[0.98] transition-all"><i data-lucide="log-out" class="w-4 h-4"></i> ${_t('logout')}</button>
   `;
 }
 
@@ -946,7 +987,7 @@ window.fullReset = async () => {
 };
 
 // =========================================================
-// FIXED: Auto-Delete flow via Provider specific Re-Auth
+// Account Deletion Flow - Fixed
 // =========================================================
 window.reqDeleteAccount = async () => {
   try {
@@ -978,9 +1019,9 @@ window.reqDeleteAccount = async () => {
       </button>`;
     }
     
-    // Fallback if they only have Email/Password (should not happen based on your setup, but just in case)
+    // Fallback just in case
     if(!hasGoogle && !hasGithub) {
-      buttonsHtml += `<button onclick="window.confirmDeleteAndLogout()" class="w-full py-3.5 mb-3 bg-red-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all">Log Out to Verify</button>`;
+      buttonsHtml += `<button onclick="window.switchAccount()" class="w-full py-3.5 mb-3 bg-red-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all">Log Out to Verify</button>`;
     }
 
     window.showModal(`
@@ -1001,12 +1042,6 @@ window.confirmDeleteWithProvider = async (provider) => {
   localStorage.setItem('vault_pending_delete', window.session.user.id);
   window.showToast('Redirecting securely...', 'info');
   await window.supa.auth.signInWithOAuth({ provider, options: { redirectTo: currentRedirectUrl() } });
-};
-
-window.confirmDeleteAndLogout = async () => {
-   window.hideModal(); window.showToast('Logging out...', 'info');
-   await window.supa.auth.signOut();
-   window.session = null; window.profile = null; window.render();
 };
 
 let cropState = { img: null, scale: 1, dx: 0, dy: 0, dragging: false, px: 0, py: 0, file: null, pointers: [], initDist: 0, initScale: 1 };
@@ -1153,32 +1188,14 @@ function hideBoot() {
   }
 }
 
-// =========================================================
-// FIXED BOOT SEQUENCE
-// Root cause of "stuck on Database Loading, then bounced back to login":
-// the old code called `await supa.auth.getSession()` BEFORE registering
-// `onAuthStateChange`. supabase-js resolves the OAuth redirect (#access_token
-// in the URL) asynchronously as soon as the client is created — if that
-// resolution finishes before the listener is attached, the SIGNED_IN event
-// is fired into the void and never received, so the app just sits on the
-// boot screen until the 7.5s timeout fires and dumps the user back to login.
-//
-// Fix: attach onAuthStateChange FIRST (supabase-js always replays the
-// current/incoming session to a listener registered right after client
-// creation, including the very first 'INITIAL_SESSION' event), and drive
-// the entire boot flow from that single listener instead of a separate
-// getSession() call.
-// =========================================================
 async function boot(){
   const bootRetryBtn = document.getElementById('bootRetryBtn');
   const bootStatusText = document.getElementById('bootStatusText');
 
-  const ultimateTimeout = setTimeout(() => {
-    // Don't silently bounce back to login — tell the user what happened
-    // and let them retry, instead of losing their login attempt silently.
+  window.ultimateTimeout = setTimeout(() => {
     if (bootStatusText) bootStatusText.innerText = 'Taking longer than usual...';
     if (bootRetryBtn) bootRetryBtn.classList.remove('hidden');
-  }, 9000);
+  }, 5000); 
 
   try {
     const cfgRes = await fetch('/api/config');
@@ -1186,15 +1203,13 @@ async function boot(){
     window.CFG = await cfgRes.json();
     window.supa = createClient(window.CFG.supabaseUrl, window.CFG.supabaseAnonKey);
 
-    let firstEventHandled = false;
-
     window.supa.auth.onAuthStateChange(async (event, s) => {
+      if (window._bootCancelled) return; 
+      
       window.session = s;
       const pendingDelId = localStorage.getItem('vault_pending_delete');
 
-      // ==========================================================
-      // AUTOMATIC DELETION ON OAUTH RETURN
-      // ==========================================================
+      // Auto delete trigger after returning from OAuth
       if (s && pendingDelId) {
         if (s.user.id === pendingDelId) {
           document.body.insertAdjacentHTML('beforeend', `<div id="del-overlay" class="fixed inset-0 bg-slate-900/95 z-[9999] flex flex-col items-center justify-center text-white backdrop-blur-md"><i data-lucide="loader-2" class="w-12 h-12 animate-spin mb-4 text-vRose"></i><p class="font-bold text-lg animate-pulse disp tracking-tight">Erasing Account Forever...</p></div>`);
@@ -1209,9 +1224,8 @@ async function boot(){
           localStorage.removeItem('vault_pending_delete'); 
           await window.supa.auth.signOut();
           document.getElementById('del-overlay')?.remove(); 
-          window.session = null; window.profile = null; window._pinVerified = false; 
-          clearTimeout(ultimateTimeout); hideBoot(); window.render();
-          firstEventHandled = true;
+          window.session = null; window.profile = null; window.txns = []; window._pinVerified = false; 
+          clearTimeout(window.ultimateTimeout); hideBoot(); window.render(); 
           return;
         } else { 
           localStorage.removeItem('vault_pending_delete'); 
@@ -1219,31 +1233,21 @@ async function boot(){
       }
       
       if (s && !pendingDelId) { 
-        await Promise.all([window.loadProfile(), window.loadTxns()]);
+        // 1. NON-BLOCKING STARTUP: Load profile only, UI renders instantly
+        await window.loadProfile();
         if (window.location.hash || window.location.search) window.history.replaceState(null, '', window.location.pathname);
+        clearTimeout(window.ultimateTimeout); hideBoot(); window.render();
+        
+        // 2. Background transaction loading
+        window.loadTxns(true); 
+      } else if (!s) {
+        clearTimeout(window.ultimateTimeout); hideBoot(); window.render();
       }
-      clearTimeout(ultimateTimeout); hideBoot(); window.render();
-      firstEventHandled = true;
     });
-
-    // Safety net: on some browsers the very first auth event can be delayed by
-    // a beat longer than expected (slow network on the token exchange). If we
-    // haven't heard anything after 3s, ask directly instead of waiting blind.
-    setTimeout(async () => {
-      if (firstEventHandled) return;
-      try {
-        const { data: { session } } = await window.supa.auth.getSession();
-        if (session && !window.session) {
-          window.session = session;
-          await Promise.all([window.loadProfile(), window.loadTxns()]);
-          clearTimeout(ultimateTimeout); hideBoot(); window.render();
-          firstEventHandled = true;
-        }
-      } catch(e) {}
-    }, 3000);
-
+    
+    if (window.activeTab === 'add') setTimeout(()=>window.setEntryType('income'), 60);
   } catch(e) { 
-    clearTimeout(ultimateTimeout); hideBoot();
+    clearTimeout(window.ultimateTimeout); hideBoot();
     document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><p class="text-sm text-slate-500 mb-4">Network error. Please try again.</p><button onclick="window.location.reload()" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold">Reload App</button></div>`;
   }
 }
