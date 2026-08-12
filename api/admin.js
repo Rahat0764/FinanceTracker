@@ -45,6 +45,13 @@ module.exports = async (req, res) => {
         return res.status(200).json({ ok: true });
       }
 
+      case 'ban_user': {
+        const { error } = await sb.auth.admin.deleteUser(payload.id);
+        if (error) throw error;
+        await sendTelegram(`🚨 <b>User Banned & Deleted</b>\nID: ${payload.id}`);
+        return res.status(200).json({ ok: true });
+      }
+
       case 'send_feedback': {
         if (!payload.message || !payload.user_id) return res.status(400).json({ error: 'Message ও user আবশ্যক' });
         await sb.from('feedback').insert([{ user_id: payload.user_id, message: payload.message }]).throwOnError();
