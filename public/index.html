@@ -9,7 +9,6 @@
 <title>Vault | Fund Tracker</title>
 <meta name="theme-color" content="#060b09">
 <script>
-  // Force reset language cache to ensure ENGLISH default for everyone
   const LANG_VERSION = '4';
   if (localStorage.getItem('vault_lang_version') !== LANG_VERSION) {
     localStorage.removeItem('vault_lang');
@@ -17,10 +16,8 @@
   }
   window.lang = localStorage.getItem('vault_lang') || 'en';
   document.documentElement.lang = window.lang;
-
   if (localStorage.getItem('vault_theme') === 'light') document.documentElement.classList.remove('dark');
   else document.documentElement.classList.add('dark');
-  
   window.__earlySwitchRequested = false;
   function handleEarlySwitch() {
     window.__earlySwitchRequested = true;
@@ -134,6 +131,8 @@ tailwind.config = {
 
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/+esm';
+
+window.isApp = navigator.userAgent.includes('VaultApp');
 
 const LANG = {
   bn: {
@@ -545,6 +544,7 @@ function buildLandingDesktopWrapper() {
         <div class="w-20 h-20 rounded-[28px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-5 border-[3px] border-white dark:border-[#141414]"><i data-lucide="vault" class="w-10 h-10 text-[#04150c]"></i></div>
         <h1 class="disp text-5xl font-extrabold mb-3 tracking-tight text-slate-800 dark:text-white leading-none">Vault</h1>
         <p class="text-sm text-slate-500 dark:text-slate-400 font-medium px-4">The most secure and private way to track your personal finances.</p>
+        ${(!window.isApp && window.CFG?.apkUrl) ? `<div class="mt-4"><a href="${window.CFG.apkUrl}" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-2xl font-bold text-sm shadow-lg shadow-vEmerald/20 flex items-center justify-center gap-2 max-w-[200px] mx-auto active:scale-95 transition-all"><i data-lucide="download" class="w-4 h-4"></i> Install App</a></div>` : ''}
       </div>
 
       <div class="w-full shrink-0 fade-in pop-in pb-4 mb-auto">
@@ -889,13 +889,13 @@ window.submitEntry = async () => {
     if (!amount || amount <= 0 || !source) throw new Error(_t('req_fields'));
     
     const row = { user_id: window.session.user.id, type: window._entryType, category: source, amount, note: document.getElementById('entryNote').value||null, txn_date: document.getElementById('entryDate').value, ref_id: refId() };
-    const { error } = await window.supa.from('transactions').insert([row]);
+    const { data, error } = await window.supa.from('transactions').insert([row]).select();
     if (error) throw error; 
     
     window.showToast(_t('save_success')); 
     window.notify('transaction_add', row); 
     
-    await window.loadTxns(); 
+    if (data && data.length > 0) window.txns.unshift(data[0]);
     
     ['entryAmount', 'entrySource', 'entryNote'].forEach(id => {
       const el = document.getElementById(id);
@@ -1083,6 +1083,7 @@ function buildProfile(){
   <div class="glass rounded-[28px] p-5 mb-5 space-y-3 shadow-sm">
     <button type="button" onclick="window.lang=window.lang==='bn'?'en':'bn'; localStorage.setItem('vault_lang',window.lang); document.documentElement.lang=window.lang; window.render();" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="languages" class="w-4 h-4 text-vIndigo"></i> ${_t('lang_switch')}</button>
     <button type="button" onclick="window.changePin()" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="key-round" class="w-4 h-4 text-vGold"></i> ${_t('change_pin')}</button>
+    ${(!window.isApp && window.CFG?.apkUrl) ? `<a href="${window.CFG.apkUrl}" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 mb-5 shadow-lg active:scale-95 transition-all"><i data-lucide="download" class="w-4 h-4"></i> Install App</a>` : ''}
   </div>
   
   <div class="glass border border-vRose/20 rounded-[28px] p-5 mb-6 shadow-sm relative overflow-hidden">
@@ -1098,10 +1099,8 @@ function buildProfile(){
   `;
 }
 
-// FIX: Prevent PIN setup if already exists & Auto save state to LocalStorage
 window.forceSetPin = async (isReset = false) => {
   if (window._pinFlowActive) return;
-  // If not resetting and pin is already set, abort UI popup and save state.
   if (!isReset && window.profile?.pin_set) { 
     window._pinVerified = true; 
     localStorage.setItem('vault_pin_verified_' + window.session.user.id, 'true');
@@ -1127,7 +1126,6 @@ window.forceSetPin = async (isReset = false) => {
     window.showToast(_t('pin_set_success'), 'success');
     window.render();
   } catch(e) { 
-    // Fallback: If DB already has the PIN but client missed it, seamlessly switch UI
     if (e.message && e.message.includes('PIN already exists')) {
       if (window.profile) window.profile.pin_set = true;
       window.showToast('PIN exists! Switching to unlock vault...', 'info');
@@ -1204,9 +1202,6 @@ window.fullReset = async () => {
   }
 };
 
-// =========================================================
-// Account Deletion Flow
-// =========================================================
 window.reqDeleteAccount = async () => {
   if (window._pinFlowActive) return;
   window._pinFlowActive = true;
@@ -1539,9 +1534,7 @@ async function boot() {
     }
 
   } catch (e) {
-    console.error('BOOT FAILED:', e);
     if (bootFinished) return;
-    
     clearTimeout(window.ultimateTimeout);
     hideBoot();
     document.getElementById('root').innerHTML = `
@@ -1549,7 +1542,6 @@ async function boot() {
         <div class="text-4xl mb-4">⚠️</div>
         <h2 class="font-bold text-lg mb-2">Vault couldn't start</h2>
         <p class="text-[13px] text-rose-500 font-mono font-medium mb-3 bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/20">${e.message || 'Unknown network error'}</p>
-        <p class="text-xs text-slate-500 mb-6 max-w-xs">If you see "Config HTTP 500" or "Supabase Config Missing", check your Vercel Environment Variables.</p>
         <div class="flex gap-3 justify-center w-full max-w-xs">
           <button onclick="window.location.reload()" class="flex-1 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold shadow-sm active:scale-95">Retry</button>
           <button onclick="handleEarlySwitch(); setTimeout(()=>window.location.reload(), 500)" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold shadow-sm active:scale-95 text-[12px]">Clear Cache</button>
