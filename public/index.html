@@ -16,8 +16,10 @@
   }
   window.lang = localStorage.getItem('vault_lang') || 'en';
   document.documentElement.lang = window.lang;
+
   if (localStorage.getItem('vault_theme') === 'light') document.documentElement.classList.remove('dark');
   else document.documentElement.classList.add('dark');
+  
   window.__earlySwitchRequested = false;
   function handleEarlySwitch() {
     window.__earlySwitchRequested = true;
@@ -151,7 +153,7 @@ const LANG = {
     setting_pin: "PIN সেট করা হচ্ছে...", pin_set_success: "PIN সফলভাবে সেট হয়েছে!", logging_in: "লগইন করা হচ্ছে...", login_success: "সফলভাবে লগইন হয়েছে",
     verifying: "যাচাই করা হচ্ছে...", deleted: "মুছে ফেলা হয়েছে!", updating: "আপডেট করা হচ্ছে...", error: "ত্রুটি", old_pin_required: "পুরাতন PIN প্রয়োজন",
     signed_in_as: "লগইন করা আছে", switch_account: "অ্যাকাউন্ট পরিবর্তন", vault_locked: "ভল্ট লক করা আছে", setup_pin_description: "আপনার ফান্ড সুরক্ষিত রাখতে একটি ৬-সংখ্যার PIN তৈরি করুন।",
-    setup_security_pin: "সিকিউরিটি PIN সেট করুন", confirm_pin: "PIN নিশ্চিত করুন", confirm_pin_desc: "একই PIN আবার দিন", verify_identity: "ফান্ডে প্রবেশ করতে আপনার পরিচয় যাচাই করুন।", unlock_vault: "ভল্ট আনলক করুন",
+    setup_security_pin: "সিকিউরিটি PIN সেট করুন", confirm_pin: "PIN নিশ্চিত করুন", confirm_pin_desc: "একই PIN আবার দিন", verify_identity: "ফান্ডে প্রবেশ করতে আপনার পরিচয় যাচাই করুন।", unlock_vault: "Unlock Vault",
     loading_data: "ডাটা লোড হচ্ছে...", logging_out: "নিরাপদে লগআউট করা হচ্ছে...",
     forgot_pin_instruction: "একই অ্যাকাউন্ট দিয়ে পুনরায় লগইন করে PIN রিসেট করুন।"
   },
@@ -321,7 +323,10 @@ window.callApi = async (path, body) => {
 };
 window.notify = (event, details) => { if (window.session) window.callApi('/api/notify', { event, accessToken: window.session.access_token, details }).catch(()=>{}); };
 
-function currentRedirectUrl() { return window.location.origin + window.location.pathname; }
+function currentRedirectUrl() { 
+  if (window.isApp) return 'vaultapp://callback';
+  return window.location.origin + window.location.pathname; 
+}
 
 window.loginProvider = async (provider) => { window.showToast('Redirecting...', 'info'); await window.supa.auth.signInWithOAuth({ provider, options: { redirectTo: currentRedirectUrl() } }); };
 window.loginEmail = async () => {
@@ -526,9 +531,9 @@ window.switchAuthMode = (mode) => {
 function getDevCreditBar() {
   return `
   <div class="w-full bg-slate-200 dark:bg-[#101014] text-slate-700 dark:text-white border-b border-slate-300 dark:border-white/5 py-1.5 md:py-2.5 px-3 md:px-4 flex flex-wrap justify-center items-center gap-x-2 gap-y-0.5 text-[9px] md:text-[11px] font-bold z-50 shadow-sm md:shadow-md shrink-0 transition-colors">
-    <span>Developed by <a href="${window.CFG?.developerLinkedin || '#'}" target="_blank" class="text-vEmerald hover:text-emerald-600 dark:hover:text-vEmerald hover:underline transition-colors">Rahat</a></span>
+    <span>Developed by <a href="${window.CFG?.developerLinkedin || '#'}" class="text-vEmerald hover:text-emerald-600 dark:hover:text-vEmerald hover:underline transition-colors">Rahat</a></span>
     <span class="opacity-40 hidden xs:inline">&bull;</span>
-    <a href="${window.CFG?.developerGithub || '#'}" target="_blank" class="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-300 transition-colors">
+    <a href="${window.CFG?.developerGithub || '#'}" class="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-slate-300 transition-colors">
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
       GitHub
     </a>
@@ -554,9 +559,9 @@ function buildLandingDesktopWrapper() {
     
     <div class="w-full shrink-0 flex justify-center fade-in pb-6 pt-2">
        <div class="px-4 py-2 rounded-2xl bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] font-bold text-slate-500 flex items-center gap-2 shadow-sm backdrop-blur-md">
-         Developed by <a href="${window.CFG?.developerLinkedin || '#'}" target="_blank" class="text-vEmerald hover:underline">Rahat</a>
+         Developed by <a href="${window.CFG?.developerLinkedin || '#'}" class="text-vEmerald hover:underline">Rahat</a>
          <span>&bull;</span>
-         <a href="${window.CFG?.developerGithub || '#'}" target="_blank" class="flex items-center gap-1 hover:text-slate-700 dark:hover:text-white transition-colors">
+         <a href="${window.CFG?.developerGithub || '#'}" class="flex items-center gap-1 hover:text-slate-700 dark:hover:text-white transition-colors">
            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> GitHub
          </a>
        </div>
