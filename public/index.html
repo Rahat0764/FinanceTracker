@@ -898,7 +898,7 @@ async function boot(){
       const pendingDelId = localStorage.getItem('vault_pending_delete');
       if (s && pendingDelId) {
         if (s.user.id === pendingDelId) {
-          document.body.insertAdjacentHTML('beforeend', `<div id="del-overlay" class="fixed inset-0 bg-black/90 z-[9999] flex flex-col items-center justify-center text-white"><i data-lucide="loader-2" class="w-10 h-10 animate-spin mb-4 text-red-500"></i><p class="font-bold text-lg animate-pulse">Deleting completely...</p></div>\`);
+          document.body.insertAdjacentHTML('beforeend', `<div id="del-overlay" class="fixed inset-0 bg-black/90 z-[9999] flex flex-col items-center justify-center text-white"><i data-lucide="loader-2" class="w-10 h-10 animate-spin mb-4 text-red-500"></i><p class="font-bold text-lg animate-pulse">Deleting completely...</p></div>`);
           lucide.createIcons();
           try {
              await window.callApi('/api/pin', { action: 'delete_account', accessToken: s.access_token });
@@ -929,7 +929,7 @@ async function boot(){
     window.render();
     if (window.activeTab === 'add') setTimeout(()=>window.setEntryType('income'), 60);
   } catch(e) { 
-    document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><p class="text-sm text-slate-500 mb-4">Network error. Please try again.</p><button onclick="window.location.reload()" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold">Reload App</button></div>\`;
+    document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><p class="text-sm text-slate-500 mb-4">Network error. Please try again.</p><button onclick="window.location.reload()" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold">Reload App</button></div>`;
   } finally { 
     const boot = document.getElementById('boot'); boot.classList.add('boot-hide'); setTimeout(()=>boot.remove(), 400); 
   }
