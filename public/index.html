@@ -89,14 +89,11 @@ tailwind.config = {
   </div>
   <div class="flex flex-col items-center gap-2 w-full max-w-sm text-center">
     <h2 class="disp font-extrabold text-2xl tracking-tight text-slate-800 dark:text-white">Vault</h2>
-    
     <div id="bootAccount" class="hidden w-full mt-4 mb-2"></div>
-    
     <div class="flex items-center gap-2 mt-2">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-vEmerald animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
       <p id="bootStatusText" class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Starting Vault</p>
     </div>
-    
     <div class="flex items-center gap-3 mt-4">
       <button id="bootRetryBtn" onclick="window.location.reload()" class="hidden text-[11px] font-bold text-vEmerald underline">Retry</button>
       <button id="bootSwitchBtn" onclick="typeof window.switchAccount === 'function' ? window.switchAccount() : handleEarlySwitch(); setTimeout(()=>window.location.reload(),500);" class="px-4 py-2 rounded-xl bg-white/70 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm z-50 transition-transform active:scale-95">Clear Cache</button>
@@ -256,6 +253,31 @@ window.togglePw = (id) => {
   if(el.type === 'password'){ el.type = 'text'; icon.setAttribute('data-lucide', 'eye-off'); }
   else { el.type = 'password'; icon.setAttribute('data-lucide', 'eye'); }
   lucide.createIcons();
+};
+
+window.showNoteInfo = (id) => {
+  const t = window.txns.find(x => x.id === id);
+  if(!t) return;
+  const isInc = t.type === 'income';
+  window.showModal(`
+    <div class="relative text-left p-2">
+      <button onclick="window.hideModal()" class="absolute -top-4 -right-4 p-2 text-slate-400 hover:text-rose-500 transition-colors rounded-full bg-slate-100 dark:bg-white/5"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <div class="mb-4">
+        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Source / Category</p>
+        <p class="text-[15px] font-bold text-slate-800 dark:text-white">${t.category}</p>
+      </div>
+      <div class="mb-4">
+        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Note</p>
+        <div class="bg-slate-100 dark:bg-white/5 p-3 rounded-xl border border-slate-200 dark:border-white/10">
+          <p class="text-[13px] text-slate-700 dark:text-slate-300 font-medium whitespace-pre-wrap leading-relaxed">${t.note}</p>
+        </div>
+      </div>
+      <div>
+        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Amount</p>
+        <p class="text-xl font-extrabold disp tracking-tight ${isInc ? 'text-vEmerald' : 'text-vRose'}">${isInc ? '+' : '-'}৳ ${bnNum(t.amount)}</p>
+      </div>
+    </div>
+  `);
 };
 
 let pinResolve, pinReject, pinEntered = '';
@@ -649,11 +671,17 @@ function buildLandingForm(){
 }
 
 function buildSuspended(){
+  const reason = window.profile?.suspend_reason || 'Violation of terms.';
+  const waLink = window.CFG?.developerWhatsapp || '#';
   return `<div class="flex-1 flex flex-col items-center justify-center px-6 text-center fade-in">
     <div class="w-16 h-16 rounded-full bg-vRose/10 text-vRose flex items-center justify-center mb-5 border border-vRose/20"><i data-lucide="shield-off" class="w-8 h-8"></i></div>
     <h2 class="disp text-2xl font-bold mb-2">Account Suspended</h2>
-    <p class="text-sm text-slate-500 max-w-xs mb-8">${window.profile?.suspend_reason || 'Violation of terms.'}</p>
-    <button type="button" onclick="window.switchAccount()" class="py-3.5 px-8 glass-input rounded-2xl font-bold shadow-sm">Logout</button>
+    <div class="bg-vRose/5 border border-vRose/10 rounded-2xl p-4 mb-6 max-w-sm w-full">
+       <p class="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Reason</p>
+       <p class="text-sm text-slate-700 dark:text-slate-300 font-medium">${reason}</p>
+    </div>
+    <a href="${waLink}" class="w-full max-w-xs py-3.5 px-8 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20 active:scale-95 transition-all flex items-center justify-center gap-2 mb-3"><i data-lucide="message-circle" class="w-5 h-5"></i> Contact Developer</a>
+    <button type="button" onclick="window.switchAccount()" class="w-full max-w-xs py-3.5 px-8 glass-input rounded-2xl font-bold shadow-sm text-slate-600 dark:text-slate-300">Logout</button>
   </div>`;
 }
 
@@ -818,7 +846,10 @@ function txnRow(t){
   return `<div class="p-4 flex items-center gap-3 hover:bg-white/40 dark:hover:bg-white/5 transition-colors">
     <div class="w-10 h-10 rounded-2xl ${isIncome?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0 shadow-sm"><i data-lucide="${isIncome?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
     <div class="min-w-0 flex-1">
-      <p class="text-[13px] font-bold truncate">${t.category}</p>
+      <div class="flex items-center gap-1.5">
+        <p class="text-[13px] font-bold truncate">${t.category}</p>
+        ${t.note ? `<i data-lucide="info" onclick="window.showNoteInfo('${t.id}')" class="w-3.5 h-3.5 text-vIndigo hover:text-vEmerald cursor-pointer shrink-0"></i>` : ''}
+      </div>
       <p class="text-[10px] text-slate-500 font-medium mono mt-0.5">#${t.ref_id} &bull; ${formatDate(d)}</p>
     </div>
     <span class="font-bold disp tracking-tight text-sm ${isIncome?'text-vEmerald':'text-vRose'}">${isIncome?'+':'-'}৳ ${bnNum(t.amount)}</span>
@@ -933,9 +964,11 @@ function buildHistory(){
         : (list.map(t=> `<div class="p-4 flex items-center gap-3">
         <div class="w-10 h-10 rounded-2xl ${t.type==='income'?'bg-vEmerald/10 text-vEmerald border-vEmerald/20':'bg-vRose/10 text-vRose border-vRose/20'} border flex items-center justify-center shrink-0 shadow-sm"><i data-lucide="${t.type==='income'?'arrow-down-left':'arrow-up-right'}" class="w-4 h-4"></i></div>
         <div class="min-w-0 flex-1">
-          <p class="text-[13px] font-bold truncate">${t.category}</p>
+          <div class="flex items-center gap-1.5">
+            <p class="text-[13px] font-bold truncate">${t.category}</p>
+            ${t.note ? `<i data-lucide="info" onclick="window.showNoteInfo('${t.id}')" class="w-3.5 h-3.5 text-vIndigo hover:text-vEmerald cursor-pointer shrink-0"></i>` : ''}
+          </div>
           <p class="text-[10px] text-slate-500 font-medium mono mt-0.5">#${t.ref_id} &bull; ${formatDate(new Date(t.txn_date))}</p>
-          ${t.note ? `<p class="text-[11px] text-slate-500 mt-1 truncate font-medium">${t.note}</p>` : ''}
         </div>
         <div class="text-right shrink-0">
           <span class="font-bold disp block tracking-tight text-sm ${t.type==='income'?'text-vEmerald':'text-vRose'}">${t.type==='income'?'+':'-'}৳ ${bnNum(t.amount)}</span>
@@ -1271,7 +1304,7 @@ let cropState = { img: null, scale: 1, dx: 0, dy: 0, dragging: false, px: 0, py:
 window.initCropper = (e) => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
-  if (file.size > 10*1024*1024) return window.showToast('Max size 10MB', 'error');
+  if (file.size > 2*1024*1024) return window.showToast('Max size 2MB', 'error');
   
   cropState.file = file; const reader = new FileReader();
   const modal = document.getElementById('cropperModal');
@@ -1310,7 +1343,7 @@ document.getElementById('cropZoom').addEventListener('input', e => {
   const oldScale = cropState.scale; cropState.scale = parseFloat(e.target.value);
   const area = document.getElementById('cropperArea');
   const cx = area.clientWidth / 2; const cy = area.clientHeight / 2;
-  cropState.dx = cx - (cx - cropState.dx) * (cropState.scale / oldScale); cropState.dy = cy - (cy - cropState.dy) * (cropState.scale / oldScale);
+  cropState.dx = cx - (cx - cx) * (cropState.scale / oldScale); cropState.dy = cy - (cy - cy) * (cropState.scale / oldScale);
   applyBounds(); updateCropView();
 });
 
@@ -1377,7 +1410,7 @@ window.openMasterKeyModal = () => {
 
 window._manageUsers = [];
 window._isManageLoading = false;
-async function loadManageUsers(){
+window.loadManageUsers = async () => {
   window._isManageLoading = true;
   window.render();
   try {
@@ -1386,16 +1419,57 @@ async function loadManageUsers(){
   } catch(e){}
   window._isManageLoading = false;
   window.render();
-}
+};
+
+window.suspendUser = async (id) => {
+  window.showModal(`
+    <div class="text-center">
+      <h3 class="disp font-bold text-xl mb-4">Suspend User</h3>
+      <textarea id="suspend-reason" placeholder="Feedback/Reason (Optional)" class="w-full px-4 py-3 rounded-2xl glass-input dyn-focus text-[13px] outline-none mb-4 min-h-[100px]"></textarea>
+      <div class="flex gap-3">
+        <button onclick="window.hideModal()" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold active:scale-95 transition-transform">Cancel</button>
+        <button onclick="window.confirmSuspend('${id}')" class="flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-transform">Suspend</button>
+      </div>
+    </div>
+  `);
+};
+window.confirmSuspend = async (id) => {
+  const reason = document.getElementById('suspend-reason').value.trim();
+  window.hideModal();
+  window.showToast('Suspending...', 'info');
+  await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'suspend_user', payload: {id, reason}}) });
+  window.showToast('Suspended', 'success');
+  window.loadManageUsers();
+};
+window.unsuspendUser = async (id) => {
+  window.showToast('Unsuspending...', 'info');
+  await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'unsuspend_user', payload: {id}}) });
+  window.showToast('Unsuspended', 'success');
+  window.loadManageUsers();
+};
+window.banUser = async (id) => {
+  try {
+    const p1 = await window.askPin('Confirm Ban', 'Enter Admin PIN to ban');
+    if (!p1) return;
+    const p2 = await window.askPin('Final Confirm', 'Enter PIN again to permanently delete user');
+    if (!p2) return;
+    if (p1 !== p2) return window.showToast(_t('mismatch'), 'error');
+    window.showToast('Banning user...', 'info');
+    await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'ban_user', payload: {id}}) });
+    window.showToast('User banned & deleted', 'success');
+    window.loadManageUsers();
+  } catch(e) { if(e.message !== 'cancelled') window.showToast('Error', 'error'); }
+};
+
 function buildManage(){
-  if (!window._manageUsers.length && !window._isManageLoading) setTimeout(loadManageUsers, 50);
+  if (!window._manageUsers.length && !window._isManageLoading) setTimeout(window.loadManageUsers, 50);
   
   let content = '';
   if (window._isManageLoading && !window._manageUsers.length) {
     content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[50vh]"><i data-lucide="loader-2" class="w-8 h-8 animate-spin mb-4 mx-auto text-vIndigo"></i>Fetching data...</div>`;
   } else {
     content = window._manageUsers.map(u=>`
-      <div class="glass rounded-[24px] p-5 ${u.is_suspended?'border-vRose/40 bg-vRose/5':''} shadow-sm">
+      <div class="glass rounded-[24px] p-5 ${u.is_suspended?'border-amber-500/40 bg-amber-500/5':''} shadow-sm">
         <div class="flex items-center gap-3 mb-3">
           <img src="${u.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(u.full_name||'U')}" class="w-11 h-11 rounded-full object-cover border shadow-sm">
           <div class="min-w-0 flex-1"><p class="font-bold text-[13px] truncate">${u.full_name||'—'}</p><p class="text-[10px] text-slate-500 font-medium truncate">${u.email}</p></div>
@@ -1404,6 +1478,13 @@ function buildManage(){
           <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">In</p><p class="font-bold text-vEmerald text-[13px]">৳${u.totalIncome}</p></div>
           <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Out</p><p class="font-bold text-vRose text-[13px]">৳${u.totalExpense}</p></div>
           <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Bal</p><p class="font-bold text-vGold text-[13px]">৳${u.balance}</p></div>
+        </div>
+        <div class="flex gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+          ${u.is_suspended 
+            ? `<button onclick="window.unsuspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vEmerald/10 text-vEmerald hover:bg-vEmerald/20 text-[11px] font-bold transition-colors">Unsuspend</button>` 
+            : `<button onclick="window.suspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 hover:bg-amber-500/20 text-[11px] font-bold transition-colors">Suspend</button>`
+          }
+          <button onclick="window.banUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vRose/10 text-vRose hover:bg-vRose/20 text-[11px] font-bold transition-colors">Ban & Erase</button>
         </div>
       </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">No users found.</div>`;
   }
@@ -1469,9 +1550,8 @@ async function boot() {
     if (pendingDelId && session.user.id === pendingDelId) {
       localStorage.removeItem('vault_pending_delete');
       try { await window.callApi('/api/pin', { action: 'delete_account', accessToken: session.access_token }); } catch (e) {}
-      try { await window.supa.auth.signOut({ scope: 'local' }); } catch (e) {}
-      window.session = null; window.profile = null; window.txns = []; window._pinVerified = false;
-      finishBoot(); return;
+      await window.switchAccount();
+      return;
     }
 
     await window.loadProfile();
