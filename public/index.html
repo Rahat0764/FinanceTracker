@@ -24,7 +24,7 @@ tailwind.config = {
 </script>
 <style>
   :root { --focus-color: #12b76a; --focus-ring: rgba(18,183,106,0.4); }
-  * { -webkit-tap-highlight-color: transparent; }
+  * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   html,body { background:#f1f5f9; min-height:100dvh; display:flex; flex-direction:column; transition: background .4s ease; overflow:hidden; }
   html.dark, html.dark body { background:#0a0a0a; }
   body { font-family:'Inter',sans-serif; }
@@ -109,7 +109,8 @@ const LANG = {
     delete_account: "অ্যাকাউন্ট ও ডেটা ডিলিট করুন", logout: "লগআউট", lang_switch: "Switch to English", exit_admin: "অ্যাডমিন প্যানেল থেকে প্রস্থান",
     save_success: "এন্ট্রি সেভ হয়েছে!", req_fields: "পরিমাণ ও উৎস দিন",
     bulk_del_all: "সম্পূর্ণ হিস্ট্রি ডিলিট করুন", bulk_del_inc: "সকল আয় হিস্ট্রি ডিলিট করুন", bulk_del_exp: "সকল ব্যয় হিস্ট্রি ডিলিট করুন",
-    del_confirm_1: "ডিলিট কনফার্মেশন (১/২)", del_confirm_2: "চূড়ান্ত কনফার্মেশন (২/২)", enter_pin_cont: "চালিয়ে যেতে পিন দিন", enter_pin_perm: "স্থায়ীভাবে ডিলিট করতে আবার পিন দিন"
+    del_confirm_1: "ডিলিট কনফার্মেশন (১/২)", del_confirm_2: "চূড়ান্ত কনফার্মেশন (২/২)", enter_pin_cont: "চালিয়ে যেতে পিন দিন", enter_pin_perm: "স্থায়ীভাবে ডিলিট করতে আবার পিন দিন",
+    wrong_pin: "ভুল পিন!", pin_length_err: "৬ সংখ্যার পিন দিন", old_pin_err: "পুরাতন পিন সঠিক নয়", mismatch: "পিন মিলেনি!"
   },
   en: {
     dashboard: "Home", add: "Entry", history: "History", manage: "Manage", profile: "Profile",
@@ -122,16 +123,30 @@ const LANG = {
     delete_account: "Delete Account & Data", logout: "Logout", lang_switch: "Switch to Bengali", exit_admin: "Exit Admin Mode",
     save_success: "Entry saved!", req_fields: "Amount and Source required",
     bulk_del_all: "Delete All History", bulk_del_inc: "Delete All Income History", bulk_del_exp: "Delete All Expense History",
-    del_confirm_1: "Bulk Delete (1/2)", del_confirm_2: "Final Confirm (2/2)", enter_pin_cont: "Enter PIN to continue", enter_pin_perm: "Enter PIN again to permanently delete"
+    del_confirm_1: "Bulk Delete (1/2)", del_confirm_2: "Final Confirm (2/2)", enter_pin_cont: "Enter PIN to continue", enter_pin_perm: "Enter PIN again to permanently delete",
+    wrong_pin: "Incorrect PIN!", pin_length_err: "PIN must be 6 digits", old_pin_err: "Old PIN is incorrect", mismatch: "PIN mismatch!"
   }
 };
 window._t = (key) => LANG[window.lang][key] || key;
+
+// Backend error translator mapping
+window.translateErr = (msg) => {
+  if (!msg) return "Error";
+  if (msg.includes('ভুল পিন')) return _t('wrong_pin');
+  if (msg.includes('পুরাতন পিন সঠিক নয়')) return _t('old_pin_err');
+  if (msg.includes('৬ সংখ্যার')) return _t('pin_length_err');
+  if (msg.includes('mismatch') || msg.toLowerCase().includes('match')) return _t('mismatch');
+  return msg; // return original if no map
+};
 
 window.supa = null; window.session = null; window.profile = null; window.isAuthLoading = false;
 window.adminToken = localStorage.getItem('vault_admin_token') || null;
 window.activeTab = localStorage.getItem('vault_tab') || 'dashboard';
 window.txns = []; window.feedbackList = []; window.CFG = {}; window.logoTapCount = 0;
-window.authMode = 'login'; // login, register, phone
+window.authMode = 'login'; // login, register
+
+// Registration State
+window.regState = { step: 1, email: '', otp: '', password: '' };
 
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
 const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
@@ -163,12 +178,15 @@ window.showToast = (msg, type='success') => {
 window.showModal = (html) => {
   const mc = document.getElementById('modalContainer');
   mc.innerHTML = `<div class="glass w-full max-w-sm rounded-3xl p-6 border pop-in shadow-2xl relative my-auto max-h-[85vh] overflow-y-auto hide-scrollbar">${html}</div>`;
-  mc.classList.remove('hidden'); lucide.createIcons();
+  mc.classList.remove('hidden'); mc.classList.add('flex'); lucide.createIcons();
   mc.onclick = (e)=>{ if(e.target===mc) window.hideModal(); };
 };
-window.hideModal = () => document.getElementById('modalContainer').classList.add('hidden');
+window.hideModal = () => {
+  const mc = document.getElementById('modalContainer');
+  mc.classList.add('hidden'); mc.classList.remove('flex');
+  if(window._emailTimerInterval) clearInterval(window._emailTimerInterval);
+};
 
-// Eye icon toggle for password
 window.togglePw = (id) => {
   const el = document.getElementById(id); const icon = document.getElementById(id+'-icon');
   if(el.type === 'password'){ el.type = 'text'; icon.setAttribute('data-lucide', 'eye-off'); }
@@ -198,7 +216,7 @@ window.askPin = (title, subtitle='', showForgot=false) => {
         <button type="button" class="key-btn py-4 rounded-2xl bg-white/40 dark:bg-white/5 border border-white/50 dark:border-white/5 disp text-xl font-bold shadow-sm" onclick="window.pinKey('0')">0</button>
         <button type="button" class="key-btn py-4 rounded-2xl text-vRose flex items-center justify-center hover:bg-vRose/10 transition-colors" onclick="window.pinKey('back')"><i data-lucide="delete" class="w-6 h-6"></i></button>
       </div>
-      ${showForgot ? `<button onclick="window.forgotPin()" class="w-full text-center mt-6 text-[12px] font-bold text-slate-500 hover:text-vIndigo transition-colors">Forgot PIN?</button>` : ''}
+      ${showForgot ? `<button onclick="window.forgotPin()" class="w-full text-center mt-6 text-[12px] font-bold text-slate-500 hover:text-vIndigo transition-colors">Forgot PIN? Relogin to reset.</button>` : ''}
     </div>`;
     pc.classList.remove('hidden'); lucide.createIcons();
   });
@@ -242,12 +260,36 @@ window.loginEmail = async () => {
   const { error } = await window.supa.auth.signInWithPassword({ email: e, password: p });
   if(error) window.showToast(error.message, 'error'); else window.showToast('Success');
 };
-window.registerEmail = async () => {
-  const e = document.getElementById('auth-email').value; const p = document.getElementById('auth-pw').value;
-  if(!e || !p) return window.showToast('Fill all fields', 'error');
-  window.showToast('Registering...', 'info');
-  const { error } = await window.supa.auth.signUp({ email: e, password: p });
-  if(error) window.showToast(error.message, 'error'); else window.showToast('Check email for verification link!');
+
+// Registration Flow: Step 1 (Send OTP)
+window.startReg = async () => {
+  const e = document.getElementById('reg-email').value;
+  if(!e) return window.showToast('Enter email address', 'error');
+  window.showToast('Sending Verification Code...', 'info');
+  const { error } = await window.supa.auth.signInWithOtp({ email: e, options: { shouldCreateUser: true } });
+  if(error) return window.showToast(error.message, 'error');
+  window.regState.email = e; window.regState.step = 2; window.showToast('Code sent to email'); window.render();
+};
+// Registration Flow: Step 2 (Verify OTP)
+window.verifyRegOtp = async () => {
+  const otp = document.getElementById('reg-otp').value;
+  if(!otp) return window.showToast('Enter OTP', 'error');
+  window.showToast('Verifying...', 'info');
+  const { error } = await window.supa.auth.verifyOtp({ email: window.regState.email, token: otp, type: 'email' });
+  if(error) return window.showToast(error.message, 'error');
+  window.regState.step = 3; window.showToast('Verified! Set a password'); window.render();
+};
+// Registration Flow: Step 3 (Set Password)
+window.setRegPassword = async () => {
+  const p1 = document.getElementById('reg-pw1').value; const p2 = document.getElementById('reg-pw2').value;
+  if(!p1 || p1.length < 6) return window.showToast('Password min 6 chars', 'error');
+  if(p1 !== p2) return window.showToast('Passwords do not match', 'error');
+  window.showToast('Saving...', 'info');
+  const { error } = await window.supa.auth.updateUser({ password: p1 });
+  if(error) return window.showToast(error.message, 'error');
+  window.regState = { step: 1, email: '', otp: '', password: '' };
+  window.showToast('Account Created Successfully!');
+  window.render();
 };
 
 window.logout = async () => { await window.supa.auth.signOut(); window.adminToken = null; localStorage.removeItem('vault_admin_token'); window.profile = null; window.session = null; window.render(); };
@@ -268,11 +310,10 @@ window.loadTxns = async () => {
 
 window.render = () => {
   const root = document.getElementById('root');
-  if (!window.session) { root.innerHTML = buildLanding(); lucide.createIcons(); return; }
+  if (!window.session) { root.innerHTML = buildLandingDesktopWrapper(); lucide.createIcons(); return; }
   if (window.profile && window.profile.is_suspended) { root.innerHTML = buildSuspended(); lucide.createIcons(); return; }
   if (window.profile && !window.profile.pin_set) { root.innerHTML = buildShell(''); lucide.createIcons(); setTimeout(forceSetPin, 300); return; }
   
-  // Verify fresh login bypass for PIN (if needed) handled securely via verify logic
   if(window.profile && window.profile.pin_set && !window._pinVerified) {
     root.innerHTML = buildShell(''); lucide.createIcons(); setTimeout(verifyPinAccess, 300); return;
   }
@@ -281,59 +322,102 @@ window.render = () => {
   lucide.createIcons(); updateNav();
 };
 
-window.switchAuthMode = (mode) => { window.authMode = mode; window.render(); };
+window.switchAuthMode = (mode) => { window.authMode = mode; window.regState.step = 1; window.render(); };
 
-function buildLanding(){
+function buildLandingDesktopWrapper() {
+  return `
+  <div class="flex-1 w-full h-full flex items-center justify-center bg-[#f1f5f9] dark:bg-[#0a0a0a]">
+    <div class="max-w-5xl w-full flex flex-col md:flex-row items-center justify-center gap-10 px-6 py-10 md:py-0">
+      
+      <div class="md:w-1/2 flex flex-col items-center md:items-start text-center md:text-left">
+        <div class="w-20 h-20 md:w-28 md:h-28 rounded-[28px] md:rounded-[36px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-6 border-[3px] border-white dark:border-[#141414]"><i data-lucide="vault" class="w-10 h-10 md:w-14 md:h-14 text-[#04150c]"></i></div>
+        <h1 class="disp text-5xl md:text-6xl font-extrabold mb-3 tracking-tight text-slate-800 dark:text-white">Vault</h1>
+        <p class="text-base md:text-lg text-slate-500 dark:text-slate-400 font-medium max-w-sm">The most secure and private way to track your personal finances.</p>
+      </div>
+
+      <div class="w-full max-w-[420px] shrink-0">
+        ${buildLandingForm()}
+      </div>
+
+    </div>
+  </div>`;
+}
+
+function buildLandingForm(){
   let formHtml = '';
-  if (window.authMode === 'login' || window.authMode === 'register') {
-    const isLogin = window.authMode === 'login';
+  
+  if (window.authMode === 'login') {
     formHtml = `
-      <div class="space-y-3 w-full fade-in">
+      <div class="space-y-4 w-full fade-in">
         <input type="email" id="auth-email" placeholder="Email address" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none">
         <div class="relative">
           <input type="password" id="auth-pw" placeholder="Password" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none pr-10">
           <i data-lucide="eye" id="auth-pw-icon" onclick="window.togglePw('auth-pw')" class="absolute right-3 top-3.5 w-5 h-5 text-slate-400 cursor-pointer"></i>
         </div>
-        <button onclick="${isLogin ? 'window.loginEmail()' : 'window.registerEmail()'}" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20 active:scale-95 transition-all">${isLogin ? 'Sign In' : 'Create Account'}</button>
-        <p class="text-[11px] text-slate-500 mt-2 font-medium">${isLogin ? 'New here?' : 'Already have an account?'} <button onclick="window.switchAuthMode('${isLogin?'register':'login'}')" class="text-vEmerald font-bold hover:underline">${isLogin ? 'Create one' : 'Log in'}</button></p>
+        <button onclick="window.loginEmail()" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20 active:scale-95 transition-all">Log In</button>
+        <p class="text-[12px] text-slate-500 mt-2 font-medium text-center">New here? <button onclick="window.switchAuthMode('register')" class="text-vEmerald font-bold hover:underline">Create an account</button></p>
       </div>
     `;
-  } else if (window.authMode === 'phone') {
-    formHtml = `
-      <div class="space-y-3 w-full fade-in">
-        <p class="text-xs text-vRose font-medium mb-2 bg-vRose/10 p-2 rounded-lg">SMS provider must be configured in Supabase to use this.</p>
-        <input type="tel" id="auth-phone" placeholder="+880 1..." class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none">
-        <button class="w-full py-3.5 bg-vIndigo text-white rounded-2xl font-bold shadow-lg shadow-vIndigo/20 active:scale-95 transition-all">Send OTP</button>
-        <p class="text-[11px] text-slate-500 mt-2 font-medium">Want to use email? <button onclick="window.switchAuthMode('login')" class="text-vEmerald font-bold hover:underline">Go back</button></p>
-      </div>
-    `;
+  } else if (window.authMode === 'register') {
+    if(window.regState.step === 1) {
+      formHtml = `
+        <div class="space-y-4 w-full fade-in">
+          <h3 class="disp font-bold text-lg mb-2">Create Account</h3>
+          <input type="email" id="reg-email" placeholder="Enter your email" value="${window.regState.email}" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none">
+          <button onclick="window.startReg()" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20 active:scale-95 transition-all">Send Verification Code</button>
+          <p class="text-[12px] text-slate-500 mt-2 font-medium text-center">Already have an account? <button onclick="window.switchAuthMode('login')" class="text-vEmerald font-bold hover:underline">Log in</button></p>
+        </div>
+      `;
+    } else if (window.regState.step === 2) {
+      formHtml = `
+        <div class="space-y-4 w-full fade-in text-center">
+          <h3 class="disp font-bold text-lg mb-1">Verify Email</h3>
+          <p class="text-xs text-slate-500 mb-4">Enter the 6-digit code sent to<br><b class="text-slate-800 dark:text-white">${window.regState.email}</b></p>
+          <input type="text" id="reg-otp" placeholder="000000" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-center tracking-[0.5em] font-mono font-bold text-lg outline-none mb-2" maxlength="6">
+          <button onclick="window.verifyRegOtp()" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20 active:scale-95 transition-all">Verify OTP</button>
+          <button onclick="window.regState.step=1; window.render();" class="text-[11px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-white">Back</button>
+        </div>
+      `;
+    } else if (window.regState.step === 3) {
+      formHtml = `
+        <div class="space-y-4 w-full fade-in text-center">
+          <h3 class="disp font-bold text-lg mb-1">Secure Account</h3>
+          <p class="text-xs text-slate-500 mb-4">Create a strong password</p>
+          <div class="relative">
+            <input type="password" id="reg-pw1" placeholder="New Password" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none pr-10">
+            <i data-lucide="eye" id="reg-pw1-icon" onclick="window.togglePw('reg-pw1')" class="absolute right-3 top-3.5 w-5 h-5 text-slate-400 cursor-pointer"></i>
+          </div>
+          <div class="relative">
+            <input type="password" id="reg-pw2" placeholder="Confirm Password" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none pr-10">
+            <i data-lucide="eye" id="reg-pw2-icon" onclick="window.togglePw('reg-pw2')" class="absolute right-3 top-3.5 w-5 h-5 text-slate-400 cursor-pointer"></i>
+          </div>
+          <button onclick="window.setRegPassword()" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20 active:scale-95 transition-all">Finish Registration</button>
+        </div>
+      `;
+    }
   }
 
   return `
-  <div class="flex-1 flex flex-col items-center justify-center px-6 text-center py-10 w-full max-w-md mx-auto fade-in">
-    <div class="glass p-8 md:p-10 rounded-[36px] w-full flex flex-col items-center relative shadow-sm">
-      <div class="w-20 h-20 rounded-[28px] bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-2xl shadow-vEmerald/20 mb-4 absolute -top-10 border-[3px] border-white dark:border-[#141414]"><i data-lucide="vault" class="w-10 h-10 text-[#04150c]"></i></div>
-      <h1 class="disp text-3xl font-extrabold mb-1 mt-6">Vault</h1>
-      <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-6 font-medium">Your private fund tracker.</p>
-      
+    <div class="glass p-8 md:p-10 rounded-[36px] w-full flex flex-col items-center relative shadow-xl border border-white/40 dark:border-white/10 bg-white/60 dark:bg-black/40">
       ${formHtml}
       
-      <div class="flex items-center w-full gap-3 my-5 opacity-60">
-        <div class="flex-1 h-px bg-slate-300 dark:bg-white/10"></div>
-        <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">OR CONTINUE WITH</span>
-        <div class="flex-1 h-px bg-slate-300 dark:bg-white/10"></div>
+      ${(window.authMode==='login' || (window.authMode==='register' && window.regState.step===1)) ? `
+      <div class="flex items-center w-full gap-3 my-6 opacity-60">
+        <div class="flex-1 h-px bg-slate-300 dark:bg-white/20"></div>
+        <span class="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider">OR CONTINUE WITH</span>
+        <div class="flex-1 h-px bg-slate-300 dark:bg-white/20"></div>
       </div>
       
       <div class="grid grid-cols-2 gap-3 w-full">
-        <button onclick="window.loginProvider('google')" class="flex items-center justify-center gap-2 bg-white dark:bg-white/5 text-slate-800 dark:text-white px-4 py-3 rounded-2xl font-bold shadow-sm active:scale-95 transition-all border border-slate-200 dark:border-white/10 text-sm">
+        <button onclick="window.loginProvider('google')" class="flex items-center justify-center gap-2 bg-white dark:bg-white/10 text-slate-800 dark:text-white px-4 py-3.5 rounded-2xl font-bold shadow-sm active:scale-95 transition-all border border-slate-200 dark:border-white/5 text-sm hover:bg-slate-50 dark:hover:bg-white/20">
           <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg> Google
         </button>
-        <button onclick="window.loginProvider('github')" class="flex items-center justify-center gap-2 bg-[#24292e] text-white px-4 py-3 rounded-2xl font-bold shadow-sm active:scale-95 transition-all text-sm">
+        <button onclick="window.loginProvider('github')" class="flex items-center justify-center gap-2 bg-[#24292e] dark:bg-white/10 text-white px-4 py-3.5 rounded-2xl font-bold shadow-sm active:scale-95 transition-all text-sm hover:bg-black dark:hover:bg-white/20 dark:border dark:border-white/5">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> GitHub
         </button>
-      </div>
+      </div>` : ''}
     </div>
-  </div>`;
+  `;
 }
 
 function buildSuspended(){
@@ -566,7 +650,7 @@ window.submitEntry = async () => {
     const { error } = await window.supa.from('transactions').insert([row]);
     if (error) throw error; window.showToast(_t('save_success')); window.notify('transaction_add', row); await window.loadTxns(); 
     document.getElementById('entryAmount').value = ''; document.getElementById('entrySource').value = ''; document.getElementById('entryNote').value = '';
-  } catch(e){ window.showToast(e.message, 'error'); } finally { btn.innerHTML = og; btn.disabled = false; lucide.createIcons(); }
+  } catch(e){ window.showToast(translateErr(e.message), 'error'); } finally { btn.innerHTML = og; btn.disabled = false; lucide.createIcons(); }
 };
 
 window._historyFilter = 'all'; window._historySearch = '';
@@ -611,44 +695,112 @@ window.deleteTxn = async (id) => {
     const pin = await window.askPin('Confirm Delete', 'Enter PIN to delete');
     await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
     await window.supa.from('transactions').delete().eq('id', id); window.showToast('Deleted'); await window.loadTxns(); window.render();
-  } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
 };
 window.bulkDeleteTxn = async (type) => {
   try {
     const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
-    if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
+    if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
     let query = window.supa.from('transactions').delete().eq('user_id', window.session.user.id); if (type !== 'all') query = query.eq('type', type);
     await query; window.showToast('Deleted'); await window.loadTxns(); window.render();
-  } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
 };
 
-window.editName = async () => {
-  const newName = prompt("Enter your new name:", window.profile.full_name || '');
-  if(!newName || newName.trim() === '') return;
-  window.showToast('Updating...', 'info');
+// Modals instead of Prompts
+window.openNameModal = () => {
+  window.showModal(`
+    <h3 class="disp font-bold text-xl mb-4">Edit Name</h3>
+    <input type="text" id="modal-name-input" value="${window.profile.full_name || ''}" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none mb-4">
+    <div class="flex gap-3">
+      <button onclick="window.hideModal()" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold">Cancel</button>
+      <button onclick="window.saveName()" class="flex-1 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold shadow-lg shadow-vEmerald/20">Save</button>
+    </div>
+  `);
+};
+window.saveName = async () => {
+  const newName = document.getElementById('modal-name-input').value;
+  if(!newName || newName.trim() === '') return window.showToast('Name cannot be empty', 'error');
+  window.hideModal(); window.showToast('Updating...', 'info');
   const { error } = await window.supa.auth.updateUser({ data: { full_name: newName } });
   if(error) return window.showToast(error.message, 'error');
   await window.loadProfile(); window.render(); window.showToast('Name updated');
 };
 
-window.editEmail = async () => {
-  const newEmail = prompt("Enter new email (Requires Verification):", window.profile.email || '');
-  if(!newEmail || newEmail.trim() === '' || newEmail === window.profile.email) return;
-  window.showToast('Sending confirmation...', 'info');
+window.openEmailModal = () => {
+  window.showModal(`
+    <h3 class="disp font-bold text-xl mb-2">Change Email</h3>
+    <p class="text-xs text-slate-500 mb-4">Requires verification.</p>
+    <input type="email" id="modal-email-input" placeholder="New Email Address" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none mb-4">
+    <button id="modal-email-send-btn" onclick="window.sendEmailCode()" class="w-full py-3.5 bg-vIndigo text-white rounded-2xl font-bold shadow-lg shadow-vIndigo/20 mb-4">Send Verification Code</button>
+    
+    <div id="modal-email-otp-box" class="hidden flex-col gap-3 fade-in">
+      <input type="text" id="modal-email-otp" placeholder="Enter 6-digit code" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-center tracking-widest font-mono font-bold text-lg outline-none" maxlength="6">
+      <button onclick="window.verifyEmailChange()" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20">Verify & Change</button>
+    </div>
+  `);
+};
+
+window._emailTimerInterval = null;
+window.sendEmailCode = async () => {
+  const newEmail = document.getElementById('modal-email-input').value;
+  if(!newEmail || newEmail.trim() === '' || newEmail === window.profile.email) return window.showToast('Enter a valid new email', 'error');
+  
+  const btn = document.getElementById('modal-email-send-btn');
+  btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto"></i>'; lucide.createIcons();
+  
   const { error } = await window.supa.auth.updateUser({ email: newEmail });
+  
+  if(error) {
+    btn.disabled = false; btn.innerHTML = 'Send Verification Code';
+    return window.showToast(error.message, 'error');
+  }
+  
+  window.showToast('Code sent to new email!', 'success');
+  document.getElementById('modal-email-input').disabled = true;
+  document.getElementById('modal-email-otp-box').classList.remove('hidden');
+  document.getElementById('modal-email-otp-box').classList.add('flex');
+  
+  let timeLeft = 60;
+  btn.classList.replace('bg-vIndigo', 'bg-slate-300'); btn.classList.add('dark:bg-slate-700', 'text-slate-500');
+  
+  window._emailTimerInterval = setInterval(() => {
+    timeLeft--;
+    if(timeLeft <= 0) {
+      clearInterval(window._emailTimerInterval);
+      btn.disabled = false; btn.innerHTML = 'Resend Code';
+      btn.classList.replace('bg-slate-300', 'bg-vIndigo'); btn.classList.remove('dark:bg-slate-700', 'text-slate-500');
+    } else {
+      btn.innerHTML = `Resend available in ${timeLeft}s`;
+    }
+  }, 1000);
+};
+
+window.verifyEmailChange = async () => {
+  const newEmail = document.getElementById('modal-email-input').value;
+  const otp = document.getElementById('modal-email-otp').value;
+  if(!otp) return window.showToast('Enter OTP', 'error');
+  
+  window.showToast('Verifying...', 'info');
+  // For standard Supabase email change, verify the token sent to the NEW email
+  const { error } = await window.supa.auth.verifyOtp({ email: newEmail, token: otp, type: 'email_change' });
+  
   if(error) return window.showToast(error.message, 'error');
-  window.showToast('Check BOTH old and new emails to confirm the change.', 'info');
+  
+  window.hideModal(); window.showToast('Email Updated Successfully!');
+  await window.loadProfile(); window.render();
 };
 
 function buildProfile(){
   const p = window.profile;
-  const providers = window.session.user.app_metadata.providers || [];
+  const identities = window.session.user.identities || [];
+  const gId = identities.find(i => i.provider === 'google');
+  const ghId = identities.find(i => i.provider === 'github');
   
   return `
   <h2 class="disp text-2xl font-extrabold mb-5 flex items-center gap-2 tracking-tight"><i data-lucide="user-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('profile')}</h2>
   <div class="glass rounded-[28px] p-6 mb-5 text-center shadow-sm relative">
-    <button onclick="window.editName()" class="absolute top-4 right-4 p-2 bg-white/50 dark:bg-white/10 rounded-xl shadow-sm text-slate-500 hover:text-vEmerald transition-colors"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+    <button onclick="window.openNameModal()" class="absolute top-4 right-4 p-2 bg-white/50 dark:bg-white/10 rounded-xl shadow-sm text-slate-500 hover:text-vEmerald transition-colors"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
     
     <div class="relative w-24 h-24 mx-auto mb-3">
       <img src="${p.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(p.full_name||'U')}" class="w-24 h-24 rounded-full object-cover border-4 border-vEmerald/30 shadow-md">
@@ -656,14 +808,15 @@ function buildProfile(){
       <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="window.initCropper(event)">
     </div>
     <h3 class="disp text-xl font-bold tracking-tight">${p.full_name || 'User'}</h3>
-    <p class="text-xs text-slate-500 font-medium mt-0.5 flex items-center justify-center gap-1">${p.email} <button onclick="window.editEmail()" class="text-vIndigo hover:underline"><i data-lucide="edit-2" class="w-3 h-3"></i></button></p>
+    <p class="text-xs text-slate-500 font-medium mt-0.5 flex items-center justify-center gap-1.5">${p.email} <button onclick="window.openEmailModal()" class="text-vIndigo hover:underline bg-vIndigo/10 p-1 rounded-md"><i data-lucide="edit-2" class="w-3 h-3"></i></button></p>
   </div>
   
   <div class="glass rounded-[28px] p-5 mb-5 shadow-sm">
-    <h4 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Connected Accounts</h4>
-    <div class="space-y-2">
-      ${providers.includes('google') ? `<div class="flex items-center gap-2 text-sm font-bold"><i data-lucide="check-circle-2" class="w-4 h-4 text-vEmerald"></i> Google Connected</div>` : `<button onclick="window.loginProvider('google')" class="text-sm font-bold text-vIndigo hover:underline">+ Connect Google</button>`}
-      ${providers.includes('github') ? `<div class="flex items-center gap-2 text-sm font-bold"><i data-lucide="check-circle-2" class="w-4 h-4 text-vEmerald"></i> GitHub Connected</div>` : `<button onclick="window.loginProvider('github')" class="text-sm font-bold text-vIndigo hover:underline">+ Connect GitHub</button>`}
+    <h4 class="text-[10px] font-bold uppercase text-slate-400 mb-4 tracking-widest">Linked Accounts</h4>
+    <div class="space-y-3">
+      ${gId ? `<div class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5"><svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg> <div class="min-w-0"><p class="text-xs font-bold">Google</p><p class="text-[10px] text-slate-500 truncate">${gId.identity_data.email}</p></div></div>` : `<button onclick="window.loginProvider('google')" class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5 w-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-600 dark:text-slate-300"><svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg> <span class="text-xs font-bold">+ Link Google Account</span></button>`}
+      
+      ${ghId ? `<div class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> <div class="min-w-0"><p class="text-xs font-bold">GitHub</p><p class="text-[10px] text-slate-500 truncate">${ghId.identity_data.email}</p></div></div>` : `<button onclick="window.loginProvider('github')" class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5 w-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-600 dark:text-slate-300"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> <span class="text-xs font-bold">+ Link GitHub Account</span></button>`}
     </div>
   </div>
 
@@ -689,7 +842,7 @@ async function forceSetPin(){
   try {
     const p1 = await window.askPin('Set Security PIN', 'Create a 6-digit PIN');
     const p2 = await window.askPin('Confirm PIN', 'Enter the same PIN again');
-    if (p1 !== p2) { window.showToast('Mismatch', 'error'); return setTimeout(forceSetPin, 400); }
+    if (p1 !== p2) { window.showToast(_t('mismatch'), 'error'); return setTimeout(forceSetPin, 400); }
     window.showToast('Setting PIN...', 'info');
     await window.callApi('/api/pin', { action:'set', pin:p1, accessToken: window.session.access_token });
     window._pinVerified = true; await window.loadProfile(); window.showToast('PIN Set!'); window.render();
@@ -702,7 +855,7 @@ async function verifyPinAccess(){
     await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
     window._pinVerified = true; window.render();
   } catch(e) { 
-    if(e.message !== 'cancelled') { window.showToast(e.message, 'error'); setTimeout(verifyPinAccess, 400); }
+    if(e.message !== 'cancelled') { window.showToast(translateErr(e.message), 'error'); setTimeout(verifyPinAccess, 400); }
   }
 }
 
@@ -710,26 +863,26 @@ window.changePin = async () => {
   try {
     const oldPin = await window.askPin('Enter Old PIN');
     const p1 = await window.askPin('Enter New PIN'); const p2 = await window.askPin('Confirm New PIN');
-    if (p1 !== p2) return window.showToast('Mismatch', 'error');
+    if (p1 !== p2) return window.showToast(_t('mismatch'), 'error');
     window.showToast('Updating PIN...', 'info');
     await window.callApi('/api/pin', { action:'set', pin:p1, oldPin, accessToken: window.session.access_token }); window.showToast('PIN Changed');
-  } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
 };
 
 window.fullReset = async () => {
   try {
     const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
-    if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
+    if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
     await window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
     window.showToast('History Wiped'); await window.loadTxns(); window.render();
-  } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
 };
 
 window.reqDeleteAccount = async () => {
   try {
     const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
-    if(pin1 !== pin2) return window.showToast('PIN Mismatch', 'error');
+    if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
     localStorage.setItem('vault_pending_delete', window.session.user.id);
     await window.supa.auth.signOut(); window.session = null; window.profile = null; window.render();
@@ -741,7 +894,7 @@ window.reqDeleteAccount = async () => {
         <button onclick="window.hideModal(); window.loginProvider('google');" class="w-full py-3.5 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-600/30 active:scale-95 transition-all">Login to Delete Data</button>
       </div>
     `);
-  } catch(e) { if(e.message !== 'cancelled') window.showToast(e.message, 'error'); }
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
 };
 
 let cropState = { img: null, scale: 1, dx: 0, dy: 0, dragging: false, px: 0, py: 0, file: null, pointers: [], initDist: 0, initScale: 1 };
@@ -750,6 +903,13 @@ window.initCropper = (e) => {
   if (!file) return;
   if (file.size > 10*1024*1024) return window.showToast('Max size 10MB', 'error');
   cropState.file = file; const reader = new FileReader();
+  
+  // FIXED: Show modal BEFORE calculating to get correct clientWidth/clientHeight
+  const modal = document.getElementById('cropperModal');
+  modal.classList.remove('hidden'); modal.classList.add('flex');
+  // Temporarily hide the UI elements to avoid flickers while math runs
+  modal.style.opacity = '0';
+  
   reader.onload = (ev) => {
     const img = document.getElementById('cropperImg'); cropState.img = img;
     img.onload = () => {
@@ -759,12 +919,12 @@ window.initCropper = (e) => {
       const zoom = document.getElementById('cropZoom');
       zoom.min = cropState.scale; zoom.max = cropState.scale * 3; zoom.step = 0.01; zoom.value = cropState.scale;
       
-      // Calculate exact center position
+      // Calculate exact center position dynamically based on the visible area
       cropState.dx = (area.clientWidth - (img.naturalWidth * cropState.scale)) / 2;
       cropState.dy = (area.clientHeight - (img.naturalHeight * cropState.scale)) / 2;
       
       applyBounds(); updateCropView();
-      document.getElementById('cropperModal').classList.remove('hidden'); document.getElementById('cropperModal').classList.add('flex');
+      modal.style.opacity = '1'; // Show UI
     };
     img.src = ev.target.result;
   };
