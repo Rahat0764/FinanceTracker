@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <!-- Fixed viewport to prevent random desktop mode switching on mobile -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, shrink-to-fit=no, viewport-fit=cover">
 <title>Vault | Fund Tracker</title>
 <meta name="theme-color" content="#060b09">
 <script>
@@ -199,7 +199,9 @@ window.togglePw = (id) => {
 };
 
 let pinResolve, pinReject, pinEntered = '';
-window.askPin = (title, subtitle='', showForgot=false) => {
+window.askPin = async (title, subtitle='', showForgot=false) => {
+  // Added delay to prevent DOM overlaps when askPin is called consecutively
+  await new Promise(r => setTimeout(r, 150)); 
   return new Promise((resolve, reject) => {
     pinResolve = resolve; pinReject = reject; pinEntered = '';
     const pc = document.getElementById('pinContainer');
@@ -378,9 +380,9 @@ function buildLandingDesktopWrapper() {
 
     </div>
 
-    <!-- Developer Footer -->
+    <!-- Developer Footer Dynamic -->
     <div class="absolute bottom-5 w-full text-center z-10 px-4 text-[11px] text-slate-500 font-semibold flex items-center justify-center gap-1.5 flex-wrap">
-      Developed by <a href="https://linkedin.com/in/RahatAhmedX" target="_blank" class="text-vEmerald font-bold hover:underline">Rahat</a> &bull; <a href="https://github.com/Rahat0764" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a>
+      Developed by <a href="${window.CFG?.developerLinkedin || '#'}" target="_blank" class="text-vEmerald font-bold hover:underline">Rahat</a> &bull; <a href="${window.CFG?.developerGithub || '#'}" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a>
     </div>
   </div>`;
 }
@@ -521,6 +523,11 @@ function buildShell(innerHtml){
           </div>
         </div>
       </header>
+
+      <!-- Mobile Dev Credit -->
+      <div class="md:hidden w-full text-center py-2 px-4 text-[10px] text-slate-500 font-bold flex items-center justify-center gap-1.5 flex-wrap bg-white/40 dark:bg-black/40 border-b border-white/20 dark:border-white/5 shadow-sm backdrop-blur-sm z-30">
+        Developed by <a href="${window.CFG?.developerLinkedin || '#'}" target="_blank" class="text-vEmerald hover:underline">Rahat</a> &bull; <a href="${window.CFG?.developerGithub || '#'}" target="_blank" class="flex items-center gap-1 hover:text-slate-800 dark:hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a>
+      </div>
       
       <main class="flex-1 overflow-y-auto w-full pb-28 md:pb-10 pt-4 px-4 md:px-8 fade-in hide-scrollbar">
         <div class="max-w-4xl mx-auto">${innerHtml}</div>
@@ -745,8 +752,10 @@ window.deleteTxn = async (id) => {
 };
 window.bulkDeleteTxn = async (type) => {
   try {
-    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
+    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); 
+    const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
     if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
+    window.showToast('Verifying...', 'info');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
     let query = window.supa.from('transactions').delete().eq('user_id', window.session.user.id); if (type !== 'all') query = query.eq('type', type);
     await query; window.showToast('Deleted'); await window.loadTxns(); window.render();
@@ -907,7 +916,8 @@ async function verifyPinAccess(){
 window.changePin = async () => {
   try {
     const oldPin = await window.askPin('Enter Old PIN');
-    const p1 = await window.askPin('Enter New PIN'); const p2 = await window.askPin('Confirm New PIN');
+    const p1 = await window.askPin('Enter New PIN'); 
+    const p2 = await window.askPin('Confirm New PIN');
     if (p1 !== p2) return window.showToast(_t('mismatch'), 'error');
     window.showToast('Updating PIN...', 'info');
     await window.callApi('/api/pin', { action:'set', pin:p1, oldPin, accessToken: window.session.access_token }); window.showToast('PIN Changed');
@@ -916,27 +926,37 @@ window.changePin = async () => {
 
 window.fullReset = async () => {
   try {
-    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
+    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); 
+    const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
     if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
+    window.showToast('Verifying...', 'info');
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
     await window.supa.from('transactions').delete().eq('user_id', window.session.user.id);
     window.showToast('History Wiped'); await window.loadTxns(); window.render();
   } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
 };
 
+// Fixed Delete Account Flow
 window.reqDeleteAccount = async () => {
   try {
-    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
+    const pin1 = await window.askPin(_t('del_confirm_1'), _t('enter_pin_cont')); 
+    const pin2 = await window.askPin(_t('del_confirm_2'), _t('enter_pin_perm'));
+    
     if(pin1 !== pin2) return window.showToast(_t('mismatch'), 'error');
+    window.showToast('Verifying PIN...', 'info');
+    
     await window.callApi('/api/pin', { action:'verify', pin: pin1, accessToken: window.session.access_token });
+    
     localStorage.setItem('vault_pending_delete', window.session.user.id);
-    await window.supa.auth.signOut(); window.session = null; window.profile = null; window.render();
+    await window.supa.auth.signOut();
+    window.session = null; window.profile = null;
+    
     window.showModal(`
       <div class="text-center">
         <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 dark:border-red-800/50"><i data-lucide="shield-alert" class="w-8 h-8"></i></div>
-        <h3 class="disp text-xl font-bold mb-2">Re-authentication</h3>
-        <p class="text-sm text-slate-500 mb-6 font-medium">To permanently erase all your data, please log in again with the same Google account.</p>
-        <button onclick="window.hideModal(); window.loginProvider('google');" class="w-full py-3.5 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-600/30 active:scale-95 transition-all">Login to Delete Data</button>
+        <h3 class="disp text-xl font-bold mb-2">Re-authentication Required</h3>
+        <p class="text-sm text-slate-500 mb-6 font-medium">Your account is marked for deletion. Please log in again now to confirm and permanently erase all data.</p>
+        <button onclick="window.hideModal(); window.render();" class="w-full py-3.5 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-600/30 active:scale-95 transition-all">Okay, Got it</button>
       </div>
     `);
   } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
@@ -1090,18 +1110,27 @@ function buildManage(){
 }
 
 async function boot(){
+  // Failsafe timeout to prevent infinite boot loop issue
+  const bootTimeout = setTimeout(() => {
+    const bootEl = document.getElementById('boot');
+    if (bootEl) { bootEl.classList.add('boot-hide'); setTimeout(()=>bootEl.remove(), 400); }
+    if(!window.session) window.render(); // force render
+  }, 8000);
+
   try {
     const cfgRes = await fetch('/api/config');
     if(!cfgRes.ok) throw new Error('Config load failed');
     window.CFG = await cfgRes.json();
     window.supa = createClient(window.CFG.supabaseUrl, window.CFG.supabaseAnonKey);
     const { data: { session } } = await window.supa.auth.getSession(); window.session = session;
+    
     window.supa.auth.onAuthStateChange(async (event, s) => {
       window.session = s;
       const pendingDelId = localStorage.getItem('vault_pending_delete');
+      // Account deletion trigger check
       if (s && pendingDelId) {
         if (s.user.id === pendingDelId) {
-          document.body.insertAdjacentHTML('beforeend', `<div id="del-overlay" class="fixed inset-0 bg-black/90 z-[9999] flex flex-col items-center justify-center text-white"><i data-lucide="loader-2" class="w-10 h-10 animate-spin mb-4 text-red-500"></i><p class="font-bold text-lg animate-pulse">Deleting completely...</p></div>`);
+          document.body.insertAdjacentHTML('beforeend', `<div id="del-overlay" class="fixed inset-0 bg-slate-900/90 z-[9999] flex flex-col items-center justify-center text-white backdrop-blur-sm"><i data-lucide="loader-2" class="w-12 h-12 animate-spin mb-4 text-vRose"></i><p class="font-bold text-lg animate-pulse disp tracking-tight">Deleting Account...</p></div>`);
           lucide.createIcons();
           try {
              await window.callApi('/api/pin', { action: 'delete_account', accessToken: s.access_token });
@@ -1111,11 +1140,13 @@ async function boot(){
           document.getElementById('del-overlay')?.remove(); window.session = null; window.profile = null; window._pinVerified = false; window.render(); return;
         } else { localStorage.removeItem('vault_pending_delete'); }
       }
+      
       if (s && !pendingDelId) { 
         try { await Promise.all([window.loadProfile(), window.loadTxns()]); } catch(e){}
       }
       window.render();
     });
+    
     if (window.session) { 
       try { await Promise.all([window.loadProfile(), window.loadTxns()]); } catch(e){}
     }
@@ -1124,7 +1155,9 @@ async function boot(){
   } catch(e) { 
     document.getElementById('root').innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center px-6"><p class="text-sm text-slate-500 mb-4">Network error. Please try again.</p><button onclick="window.location.reload()" class="px-6 py-3 bg-vEmerald text-[#04150c] rounded-xl font-bold">Reload App</button></div>`;
   } finally { 
-    const boot = document.getElementById('boot'); boot.classList.add('boot-hide'); setTimeout(()=>boot.remove(), 400); 
+    clearTimeout(bootTimeout);
+    const boot = document.getElementById('boot'); 
+    if(boot) { boot.classList.add('boot-hide'); setTimeout(()=>boot.remove(), 400); }
   }
 }
 boot();
