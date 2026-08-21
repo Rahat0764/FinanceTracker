@@ -72,13 +72,15 @@ tailwind.config = {
   .toast-in{animation:toastIn .3s ease-out forwards} @keyframes toastIn{from{opacity:0;transform:translateX(110%)}to{opacity:1;transform:translateX(0)}}
   #boot{transition:opacity .4s ease,visibility .4s ease} .boot-hide{opacity:0;visibility:hidden;pointer-events:none}
   ::selection{background:#12b76a;color:#04150c}
-  .ring-track{stroke:rgba(255,255,255,.08)} .dark .ring-track{stroke:rgba(255,255,255,.08)}
+  .ring-track{stroke:rgba(0,0,0,.1)} .dark .ring-track{stroke:rgba(255,255,255,.08)}
   .ring-prog{stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.16,1,.3,1), stroke 0.4s ease;}
   .key-btn{transition:transform .12s ease,background .12s ease} .key-btn:active{transform:scale(.92)}
   .dot{width:12px;height:12px;border-radius:50%;background:rgba(0,0,0,.1);transition:all .2s ease}
   .dark .dot{background:rgba(255,255,255,.12)}
   .dot.filled{background:#12b76a;box-shadow:0 0 12px rgba(18,183,106,.6)}
   #root { width: 100%; min-height: 100dvh; display: flex; flex-direction: column; }
+  .pull-spin{animation:spin .7s linear infinite}
+  .fab-sub{transition:opacity .25s cubic-bezier(.16,1,.3,1), transform .25s cubic-bezier(.16,1,.3,1)}
 </style>
 </head>
 <body class="text-slate-900 dark:text-slate-100 flex flex-col h-full w-full relative">
@@ -210,7 +212,9 @@ window._regTimerLeft = 0; window._regTimer = null;
 window.isTxnLoading = false;
 window._pinVerified = false;
 window._pinFlowActive = false; 
-window._pinModalOpen = false; 
+window._pinModalOpen = false;
+window._feedbackOpen = false;
+window._refreshing = false;
 
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
 const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
@@ -562,6 +566,7 @@ window.render = () => {
   root.innerHTML = buildShell(buildTabContent());
   lucide.createIcons(); 
   updateNav();
+  attachPullRefresh();
 
   if (window.activeTab === 'add') {
     document.documentElement.style.setProperty('--focus-color', window._entryType === 'income' ? '#12b76a' : '#f2495c');
@@ -713,6 +718,56 @@ function buildSuspended(){
   </div>`;
 }
 
+function buildFeedbackFab(){
+  const open = window._feedbackOpen;
+  return `
+  <div class="md:hidden fixed bottom-24 right-5 z-40 flex flex-col items-end gap-3">
+    <div class="fab-sub flex flex-col items-end gap-3 ${open ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}">
+      <button onclick="window.openWhatsappFeedback()" class="w-12 h-12 rounded-full bg-[#25D366] shadow-lg flex items-center justify-center active:scale-90 transition-transform" title="WhatsApp">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.3-1.39a9.9 9.9 0 0 0 4.69 1.19h.01c5.46 0 9.9-4.45 9.9-9.91C21.96 6.45 17.5 2 12.04 2zm5.79 14.02c-.24.68-1.4 1.3-1.93 1.35-.49.05-1.11.07-1.79-.12-.41-.12-.94-.29-1.62-.57-2.85-1.23-4.71-4.09-4.85-4.28-.14-.19-1.16-1.54-1.16-2.94s.73-2.09.99-2.38c.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.41-.07.64.49.24.57.81 1.98.88 2.13.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.13.57.17.29.75 1.24 1.62 2.01 1.11.99 2.05 1.3 2.34 1.44.29.14.46.12.63-.07.17-.19.71-.83.9-1.11.19-.29.38-.24.64-.14.26.1 1.66.78 1.94.92.29.14.48.21.55.33.07.12.07.7-.17 1.38z"/></svg>
+      </button>
+      <button onclick="window.openInAppFeedback()" class="w-12 h-12 rounded-full bg-vIndigo shadow-lg flex items-center justify-center active:scale-90 transition-transform" title="Send Feedback">
+        <i data-lucide="message-square-text" class="w-5 h-5 text-white"></i>
+      </button>
+    </div>
+    <button onclick="window.toggleFeedbackMenu()" class="w-14 h-14 rounded-full bg-vEmerald shadow-xl flex items-center justify-center active:scale-90 transition-transform">
+      <i data-lucide="${open ? 'x' : 'message-circle'}" class="w-6 h-6 text-[#04150c]"></i>
+    </button>
+  </div>`;
+}
+window.toggleFeedbackMenu = () => { window._feedbackOpen = !window._feedbackOpen; window.render(); };
+window.openWhatsappFeedback = () => {
+  window._feedbackOpen = false; window.render();
+  const link = window.CFG?.developerWhatsapp;
+  if (!link) { window.showToast('WhatsApp link not configured', 'error'); return; }
+  window.open(link, '_blank');
+};
+window.openInAppFeedback = () => {
+  window._feedbackOpen = false; window.render();
+  window.showModal(`
+    <div class="text-center">
+      <div class="w-14 h-14 bg-vIndigo/10 text-vIndigo rounded-full flex items-center justify-center mx-auto mb-3 border border-vIndigo/20"><i data-lucide="message-square-text" class="w-6 h-6"></i></div>
+      <h3 class="disp font-bold text-xl mb-1">Send Feedback</h3>
+      <p class="text-xs text-slate-500 mb-4">Tell us what's on your mind. It goes straight to the developer.</p>
+      <textarea id="feedback-text" placeholder="Write your feedback..." class="w-full px-4 py-3 rounded-2xl glass-input dyn-focus text-[13px] outline-none mb-4 min-h-[110px]"></textarea>
+      <div class="flex gap-3">
+        <button onclick="window.hideModal()" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold active:scale-95 transition-transform">Cancel</button>
+        <button onclick="window.submitFeedback()" class="flex-1 py-3 bg-vIndigo text-white rounded-xl font-bold shadow-lg shadow-vIndigo/20 active:scale-95 transition-transform">Send</button>
+      </div>
+    </div>
+  `);
+};
+window.submitFeedback = async () => {
+  const msg = document.getElementById('feedback-text').value.trim();
+  if (!msg) { window.showToast('Write something first', 'error'); return; }
+  window.showToast('Sending...', 'info');
+  try {
+    await window.callApi('/api/feedback', { action: 'submit', message: msg, accessToken: window.session.access_token });
+    window.hideModal();
+    window.showToast('Thank you! Feedback sent.');
+  } catch(e) { window.showToast(translateErr(e.message), 'error'); }
+};
+
 function buildShell(innerHtml){
   const p = window.profile || {}; const isSuper = window.adminToken;
   const navItems = [
@@ -763,8 +818,15 @@ function buildShell(innerHtml){
       ${getDevCreditBar()}
       
       <main class="flex-1 overflow-y-auto w-full pb-28 md:pb-10 pt-4 px-4 md:px-8 fade-in hide-scrollbar relative block h-full">
+        <div id="pullIndicator" class="fixed top-16 left-1/2 z-30 opacity-0" style="transform:translate(-50%,-40px);transition:opacity .2s ease;">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-lg border-2 border-white dark:border-[#0a0a0a]">
+            <i data-lucide="vault" id="pullIndicatorIcon" class="w-5 h-5 text-[#04150c]"></i>
+          </div>
+        </div>
         <div class="max-w-4xl mx-auto">${innerHtml}</div>
       </main>
+
+      ${buildFeedbackFab()}
 
       <nav class="md:hidden fixed bottom-5 inset-x-0 mx-auto w-[92%] max-w-md glass z-40 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
         <div class="flex justify-around items-center h-[68px] px-1.5">
@@ -774,6 +836,46 @@ function buildShell(innerHtml){
     </div>
   </div>
   `;
+}
+
+function attachPullRefresh(){
+  const main = document.querySelector('main');
+  const indicator = document.getElementById('pullIndicator');
+  const icon = document.getElementById('pullIndicatorIcon');
+  if (!main || !indicator) return;
+  let startY = 0, pulling = false, currentPull = 0;
+
+  main.addEventListener('touchstart', (e) => {
+    if (main.scrollTop <= 0 && !window._refreshing) { startY = e.touches[0].clientY; pulling = true; }
+  }, { passive: true });
+
+  main.addEventListener('touchmove', (e) => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy > 0 && main.scrollTop <= 0) {
+      currentPull = Math.min(dy, 100);
+      indicator.style.opacity = String(Math.min(currentPull / 70, 1));
+      indicator.style.transform = `translate(-50%, ${currentPull - 44}px) rotate(${currentPull * 3}deg)`;
+    }
+  }, { passive: true });
+
+  main.addEventListener('touchend', async () => {
+    if (pulling && currentPull > 70 && !window._refreshing) {
+      window._refreshing = true;
+      indicator.style.opacity = '1';
+      indicator.style.transform = 'translate(-50%, 16px)';
+      if (icon) icon.classList.add('pull-spin');
+      await window.loadTxns(true);
+      await window.loadProfile();
+      window._refreshing = false;
+      window.render();
+      window.showToast('Refreshed', 'success');
+    } else {
+      indicator.style.opacity = '0';
+      indicator.style.transform = 'translate(-50%, -40px)';
+    }
+    pulling = false; currentPull = 0;
+  });
 }
 
 window.handleLogoTap = () => {
@@ -1095,6 +1197,76 @@ window.unlinkProvider = async (provider) => {
   }
 };
 
+window.exportData = async () => {
+  try {
+    if (!window.txns.length) { window.showToast('No data to export', 'error'); return; }
+    const headers = ['type','category','amount','note','txn_date','ref_id'];
+    const rows = window.txns.map(t => headers.map(h => {
+      let v = t[h] ?? '';
+      v = String(v).replace(/"/g, '""');
+      return `"${v}"`;
+    }).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const filename = `vault_export_${getLocalDateString()}.csv`;
+
+    if (window.isApp && window.AndroidDownloader) {
+      const base64 = btoa(unescape(encodeURIComponent(csv)));
+      window.AndroidDownloader.saveBase64File(base64, filename, 'text/csv');
+      window.showToast('Saving to Downloads...', 'info');
+    } else {
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      window.showToast('Exported!');
+    }
+  } catch(e) { window.showToast('Export failed', 'error'); }
+};
+
+window.triggerImport = () => { const el = document.getElementById('importInput'); if (el) el.click(); };
+window.handleImportFile = (e) => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const text = ev.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) throw new Error('No data rows found');
+      const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+      const rows = lines.slice(1).map(line => {
+        const matches = line.match(/(".*?"|[^,]+)(?=,|$)/g) || [];
+        const vals = matches.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
+        const obj = {}; headers.forEach((h, i) => obj[h] = vals[i]);
+        return obj;
+      });
+
+      window.showToast('Importing...', 'info');
+      const insertRows = rows
+        .filter(r => r.amount && Number(r.amount) > 0)
+        .map(r => ({
+          user_id: window.session.user.id,
+          type: r.type === 'income' ? 'income' : 'expense',
+          category: r.category || 'Imported',
+          amount: Number(r.amount),
+          note: r.note || null,
+          txn_date: r.txn_date || getLocalDateString(),
+          ref_id: (r.ref_id && r.ref_id.trim()) || refId()
+        }));
+
+      if (!insertRows.length) throw new Error('No valid rows found');
+      const { error } = await window.supa.from('transactions').insert(insertRows);
+      if (error) throw error;
+
+      window.showToast(`${insertRows.length} entries imported!`);
+      await window.loadTxns();
+    } catch(err) { window.showToast(translateErr(err.message || 'Import failed'), 'error'); }
+  };
+  reader.readAsText(file);
+};
+
 function buildProfile(){
   const p = window.profile || {};
   const { gId, ghId } = getIdentities();
@@ -1141,6 +1313,13 @@ function buildProfile(){
     <button type="button" onclick="window.lang=window.lang==='bn'?'en':'bn'; localStorage.setItem('vault_lang',window.lang); document.documentElement.lang=window.lang; window.render();" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="languages" class="w-4 h-4 text-vIndigo"></i> ${_t('lang_switch')}</button>
     <button type="button" onclick="window.changePin()" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="key-round" class="w-4 h-4 text-vGold"></i> ${_t('change_pin')}</button>
     ${(!window.isApp && window.CFG?.apkUrl) ? `<a href="${window.CFG.apkUrl}" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 mb-5 shadow-lg active:scale-95 transition-all"><i data-lucide="download" class="w-4 h-4"></i> Install App</a>` : ''}
+  </div>
+
+  <div class="glass rounded-[28px] p-5 mb-5 space-y-3 shadow-sm">
+    <h4 class="text-[10px] font-bold uppercase text-slate-400 mb-1 tracking-widest">Data</h4>
+    <button type="button" onclick="window.exportData()" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="download" class="w-4 h-4 text-vEmerald"></i> Export Data (CSV)</button>
+    <button type="button" onclick="window.triggerImport()" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="upload" class="w-4 h-4 text-vIndigo"></i> Import Data (CSV)</button>
+    <input type="file" id="importInput" accept=".csv" class="hidden" onchange="window.handleImportFile(event)">
   </div>
   
   <div class="glass border border-vRose/20 rounded-[28px] p-5 mb-6 shadow-sm relative overflow-hidden">
@@ -1429,6 +1608,7 @@ window.openMasterKeyModal = () => {
   };
 };
 
+window._manageView = 'users';
 window._manageUsers = [];
 window._isManageLoading = false;
 window._manageLoaded = false;
@@ -1449,6 +1629,29 @@ window.loadManageUsers = async () => {
   window._isManageLoading = false;
   window.render();
 };
+
+window._manageFeedback = [];
+window._isFeedbackLoading = false;
+window._feedbackLoaded = false;
+window._feedbackError = null;
+window.loadManageFeedback = async () => {
+  window._isFeedbackLoading = true;
+  window._feedbackError = null;
+  window.render();
+  try {
+    const res = await window.withTimeout(fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action:'list_user_feedback' }) }), 12000, 'Request timed out');
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed to load feedback');
+    window._manageFeedback = json.feedback || [];
+    window._feedbackLoaded = true;
+  } catch(e) {
+    window._feedbackError = translateErr(e.message) || 'Failed to load feedback';
+  }
+  window._isFeedbackLoading = false;
+  window.render();
+};
+
+window.switchManageView = (view) => { window._manageView = view; window.render(); };
 
 window.suspendUser = async (id) => {
   window.showModal(`
@@ -1508,7 +1711,7 @@ window.showUserDetail = (id) => {
     <div class="relative text-center">
       <button onclick="window.hideModal()" class="absolute -top-4 -right-4 p-2 text-slate-400 hover:text-rose-500 transition-colors rounded-full bg-slate-100 dark:bg-white/5"><i data-lucide="x" class="w-4 h-4"></i></button>
       <img src="${avatar}" class="w-20 h-20 rounded-full mx-auto mb-3 border-2 border-vEmerald/30 object-cover shadow-md">
-      <h3 class="disp text-lg font-bold tracking-tight">${u.full_name || '—'}</h3>
+      <h3 class="disp text-lg font-bold tracking-tight">${u.full_name || '—'} ${u.isAdmin ? '<span class="text-[10px] bg-vIndigo text-white px-2 py-0.5 rounded-full align-middle ml-1">Admin</span>' : ''}</h3>
       <p class="text-xs text-slate-500 mb-6 break-all">${u.email || ''}</p>
       <div class="space-y-3 text-left">
         <div class="bg-white/50 dark:bg-black/20 p-4 rounded-2xl flex justify-between items-center gap-3 shadow-inner">
@@ -1528,44 +1731,107 @@ window.showUserDetail = (id) => {
   `);
 };
 
+window.showFeedbackDetail = (id) => {
+  const f = window._manageFeedback.find(x => x.id === id);
+  if (!f) return;
+  const avatar = f.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(f.full_name||'U')}`;
+  window.showModal(`
+    <div class="relative">
+      <button onclick="window.hideModal()" class="absolute -top-4 -right-4 p-2 text-slate-400 hover:text-rose-500 transition-colors rounded-full bg-slate-100 dark:bg-white/5"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <div class="flex items-center gap-3 mb-4">
+        <img src="${avatar}" class="w-12 h-12 rounded-full object-cover border-2 border-vIndigo/30 shadow-sm shrink-0">
+        <div class="min-w-0"><p class="font-bold text-sm">${f.full_name}</p><p class="text-[11px] text-slate-500 truncate">${f.email}</p></div>
+      </div>
+      <div class="bg-slate-100 dark:bg-white/5 p-4 rounded-2xl border border-slate-200 dark:border-white/10 mb-3">
+        <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">${f.message}</p>
+      </div>
+      <p class="text-[10px] text-slate-400">${new Date(f.created_at).toLocaleString()}</p>
+    </div>
+  `);
+};
+
 function buildManage(){
-  if (!window._manageLoaded && !window._isManageLoading && !window._manageError) setTimeout(window.loadManageUsers, 50);
-  
-  let content = '';
-  if (window._isManageLoading && !window._manageLoaded) {
-    content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[50vh]"><i data-lucide="loader-2" class="w-8 h-8 animate-spin mb-4 mx-auto text-vIndigo"></i>Fetching data...</div>`;
-  } else if (window._manageError) {
-    content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[40vh] gap-4">
-      <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto text-vRose"></i>
-      <p>${window._manageError}</p>
-      <button onclick="window.loadManageUsers()" class="px-5 py-2.5 rounded-xl bg-vIndigo text-white text-xs font-bold shadow-md active:scale-95 transition-transform">Retry</button>
-    </div>`;
+  const isUsersView = window._manageView !== 'feedback';
+
+  if (isUsersView) {
+    if (!window._manageLoaded && !window._isManageLoading && !window._manageError) setTimeout(window.loadManageUsers, 50);
   } else {
-    content = window._manageUsers.map(u=>`
-      <div onclick="window.showUserDetail('${u.id}')" class="glass rounded-[24px] p-5 ${u.is_suspended?'border-amber-500/40 bg-amber-500/5':''} shadow-sm cursor-pointer active:scale-[0.99] transition-transform">
-        <div class="flex items-center gap-3 mb-3">
-          <img src="${u.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(u.full_name||'U')}" class="w-11 h-11 rounded-full object-cover border shadow-sm shrink-0">
-          <div class="min-w-0 flex-1"><p class="font-bold text-[13px] truncate">${u.full_name||'—'}</p><p class="text-[10px] text-slate-500 font-medium truncate">${u.email}</p></div>
-        </div>
-        <div class="grid grid-cols-3 gap-2 text-center">
-          <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">In</p><p class="font-bold text-vEmerald text-[11px] truncate" title="৳${u.totalIncome}">৳${bnNum(u.totalIncome)}</p></div>
-          <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Out</p><p class="font-bold text-vRose text-[11px] truncate" title="৳${u.totalExpense}">৳${bnNum(u.totalExpense)}</p></div>
-          <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="font-bold text-vGold text-[9px] uppercase mb-0.5">Bal</p><p class="font-bold text-vGold text-[11px] truncate" title="৳${u.balance}">৳${bnNum(u.balance)}</p></div>
-        </div>
-        <div class="flex gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
-          ${u.is_suspended 
-            ? `<button onclick="event.stopPropagation(); window.unsuspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vEmerald/10 text-vEmerald hover:bg-vEmerald/20 text-[11px] font-bold transition-colors">Unsuspend</button>` 
-            : `<button onclick="event.stopPropagation(); window.suspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 hover:bg-amber-500/20 text-[11px] font-bold transition-colors">Suspend</button>`
-          }
-          <button onclick="event.stopPropagation(); window.banUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vRose/10 text-vRose hover:bg-vRose/20 text-[11px] font-bold transition-colors">Ban & Erase</button>
-        </div>
-      </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">No users found.</div>`;
+    if (!window._feedbackLoaded && !window._isFeedbackLoading && !window._feedbackError) setTimeout(window.loadManageFeedback, 50);
+  }
+
+  let content = '';
+  if (isUsersView) {
+    if (window._isManageLoading && !window._manageLoaded) {
+      content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[50vh]"><i data-lucide="loader-2" class="w-8 h-8 animate-spin mb-4 mx-auto text-vIndigo"></i>Fetching data...</div>`;
+    } else if (window._manageError) {
+      content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[40vh] gap-4">
+        <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto text-vRose"></i>
+        <p>${window._manageError}</p>
+        <button onclick="window.loadManageUsers()" class="px-5 py-2.5 rounded-xl bg-vIndigo text-white text-xs font-bold shadow-md active:scale-95 transition-transform">Retry</button>
+      </div>`;
+    } else {
+      content = window._manageUsers.map(u=>`
+        <div onclick="window.showUserDetail('${u.id}')" class="glass rounded-[24px] p-5 ${u.is_suspended?'border-amber-500/40 bg-amber-500/5':''} shadow-sm cursor-pointer active:scale-[0.99] transition-transform">
+          <div class="flex items-center gap-3 mb-3">
+            <img src="${u.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(u.full_name||'U')}" class="w-11 h-11 rounded-full object-cover border shadow-sm shrink-0">
+            <div class="min-w-0 flex-1">
+              <p class="font-bold text-[13px] truncate flex items-center gap-1.5">${u.full_name||'—'} ${u.isAdmin ? '<span class="text-[9px] bg-vIndigo text-white px-1.5 py-0.5 rounded-full shrink-0">Admin</span>' : ''}</p>
+              <p class="text-[10px] text-slate-500 font-medium truncate">${u.email}</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">In</p><p class="font-bold text-vEmerald text-[11px] truncate" title="৳${u.totalIncome}">৳${bnNum(u.totalIncome)}</p></div>
+            <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Out</p><p class="font-bold text-vRose text-[11px] truncate" title="৳${u.totalExpense}">৳${bnNum(u.totalExpense)}</p></div>
+            <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="font-bold text-vGold text-[9px] uppercase mb-0.5">Bal</p><p class="font-bold text-vGold text-[11px] truncate" title="৳${u.balance}">৳${bnNum(u.balance)}</p></div>
+          </div>
+          ${u.isAdmin ? `
+          <div class="mt-3 pt-3 border-t border-slate-200 dark:border-white/10 text-center">
+            <span class="text-[11px] text-slate-400 font-medium">This is your admin account — actions disabled</span>
+          </div>` : `
+          <div class="flex gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+            ${u.is_suspended 
+              ? `<button onclick="event.stopPropagation(); window.unsuspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vEmerald/10 text-vEmerald hover:bg-vEmerald/20 text-[11px] font-bold transition-colors">Unsuspend</button>` 
+              : `<button onclick="event.stopPropagation(); window.suspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 hover:bg-amber-500/20 text-[11px] font-bold transition-colors">Suspend</button>`
+            }
+            <button onclick="event.stopPropagation(); window.banUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vRose/10 text-vRose hover:bg-vRose/20 text-[11px] font-bold transition-colors">Ban & Erase</button>
+          </div>`}
+        </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">No users found.</div>`;
+    }
+  } else {
+    if (window._isFeedbackLoading && !window._feedbackLoaded) {
+      content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[50vh]"><i data-lucide="loader-2" class="w-8 h-8 animate-spin mb-4 mx-auto text-vIndigo"></i>Fetching feedback...</div>`;
+    } else if (window._feedbackError) {
+      content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[40vh] gap-4">
+        <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto text-vRose"></i>
+        <p>${window._feedbackError}</p>
+        <button onclick="window.loadManageFeedback()" class="px-5 py-2.5 rounded-xl bg-vIndigo text-white text-xs font-bold shadow-md active:scale-95 transition-transform">Retry</button>
+      </div>`;
+    } else {
+      content = window._manageFeedback.map(f=>`
+        <div onclick="window.showFeedbackDetail('${f.id}')" class="glass rounded-[24px] p-4 shadow-sm cursor-pointer active:scale-[0.99] transition-transform">
+          <div class="flex items-start gap-3">
+            <img src="${f.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(f.full_name||'U')}" class="w-10 h-10 rounded-full object-cover border shadow-sm shrink-0">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2">
+                <p class="font-bold text-[13px] truncate">${f.full_name}</p>
+                <p class="text-[9px] text-slate-400 shrink-0">${new Date(f.created_at).toLocaleDateString()}</p>
+              </div>
+              <p class="text-[10px] text-slate-500 truncate mb-1.5">${f.email}</p>
+              <p class="text-[12px] text-slate-600 dark:text-slate-300 line-clamp-2">${f.message}</p>
+            </div>
+          </div>
+        </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">No feedback yet.</div>`;
+    }
   }
 
   return `
-  <div class="flex items-center justify-between mb-5 mt-2">
+  <div class="flex items-center justify-between mb-4 mt-2">
     <h2 class="disp text-2xl font-extrabold flex items-center gap-2 tracking-tight"><i data-lucide="shield" class="w-6 h-6 text-vIndigo"></i> Manage</h2>
     <button onclick="window.exitAdmin()" class="text-[10px] glass-input px-3 py-2 rounded-lg font-bold">${_t('exit_admin')}</button>
+  </div>
+  <div class="flex gap-2 mb-4">
+    <button onclick="window.switchManageView('users')" class="px-4 py-2 rounded-xl text-[11px] font-bold border transition-colors ${isUsersView?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Users</button>
+    <button onclick="window.switchManageView('feedback')" class="px-4 py-2 rounded-xl text-[11px] font-bold border transition-colors ${!isUsersView?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Feedback</button>
   </div>
   <div class="space-y-4 fade-in">
     ${content}
