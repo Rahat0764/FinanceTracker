@@ -245,7 +245,6 @@ window.showModal = (html) => {
 window.hideModal = () => {
   const mc = document.getElementById('modalContainer');
   mc.classList.add('hidden'); mc.classList.remove('flex');
-  if(window._emailTimerInterval) clearInterval(window._emailTimerInterval);
 };
 
 window.togglePw = (id) => {
@@ -487,11 +486,35 @@ window.loadTxns = async (silent = false) => {
   }
 };
 
+function getIdentities() {
+  const identities = window.session?.user?.identities || [];
+  const gId = identities.find(i => i.provider === 'google');
+  const ghId = identities.find(i => i.provider === 'github');
+  return { identities, gId, ghId };
+}
+
+function getEmailChoice() {
+  if (!window.session?.user?.id) return 'google';
+  return localStorage.getItem('vault_email_choice_' + window.session.user.id) || 'google';
+}
+
+function getDisplayEmail() {
+  const { gId, ghId } = getIdentities();
+  if (gId && ghId) {
+    const choice = getEmailChoice();
+    if (choice === 'github') return ghId.identity_data.email || ghId.identity_data.user_name || '';
+    return gId.identity_data.email || '';
+  }
+  if (gId) return gId.identity_data.email || '';
+  if (ghId) return ghId.identity_data.email || ghId.identity_data.user_name || '';
+  return window.session?.user?.email || window.profile?.email || '';
+}
+
 function getAccountBar() {
   const p = window.profile || {};
   const s = window.session;
   if (!s?.user) return '';
-  const email = s.user.email || p.email || '';
+  const email = getDisplayEmail();
   const name = p.full_name || s.user.user_metadata?.full_name || s.user.user_metadata?.name || 'User';
   const avatar = p.avatar_url || s.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`;
   return `
@@ -755,7 +778,7 @@ function buildShell(innerHtml){
 
 window.handleLogoTap = () => {
   const adminEmail = window.CFG?.superAdminEmail?.toLowerCase().trim();
-  const userEmail = window.profile?.email?.toLowerCase().trim();
+  const userEmail = (getDisplayEmail() || '').toLowerCase().trim();
   if (!adminEmail || !userEmail || adminEmail !== userEmail) return;
   window.logoTapCount++; 
   if (window.logoTapCount >= 5) { window.logoTapCount = 0; window.openMasterKeyModal(); }
@@ -1036,72 +1059,47 @@ window.saveName = async () => {
   await window.loadProfile(); window.render(); window.showToast('Name updated');
 };
 
-window.openEmailModal = () => {
-  window.showModal(`
-    <div class="text-center">
-      <h3 class="disp font-bold text-xl mb-1">Change Email</h3>
-      <p class="text-[11px] text-slate-500 mb-4">We will send a code to your new email.</p>
-      <input type="email" id="modal-email-input" placeholder="Enter new email address" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-[14px] outline-none mb-4 text-center">
-      <button id="modal-email-send-btn" onclick="window.sendEmailCode()" class="w-full py-3.5 bg-vIndigo text-white rounded-2xl font-bold shadow-lg shadow-vIndigo/20 mb-2 active:scale-95 transition-all">Send Code</button>
-      <button onclick="window.hideModal()" class="text-[11px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-white mt-1">Cancel</button>
-      
-      <div id="modal-email-otp-box" class="hidden flex-col gap-3 fade-in mt-4 border-t border-slate-200 dark:border-white/10 pt-4">
-        <p class="text-xs text-slate-500">Enter the verification code below:</p>
-        <input type="text" id="modal-email-otp" placeholder="00000000" class="w-full px-4 py-3.5 rounded-2xl glass-input dyn-focus text-center tracking-[0.4em] font-mono font-bold text-lg outline-none" maxlength="8">
-        <button onclick="window.verifyEmailChange()" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold shadow-lg shadow-vEmerald/20 active:scale-95 transition-all">Verify & Save Email</button>
-      </div>
-    </div>
-  `);
+window.chooseEmail = (provider) => {
+  if (!window.session?.user?.id) return;
+  localStorage.setItem('vault_email_choice_' + window.session.user.id, provider);
+  window.render();
 };
 
-window._emailTimerInterval = null;
-window.sendEmailCode = async () => {
-  const newEmail = document.getElementById('modal-email-input').value;
-  if(!newEmail || newEmail.trim() === '' || newEmail === window.profile.email) return window.showToast('Enter a valid new email', 'error');
-  
-  const btn = document.getElementById('modal-email-send-btn');
-  btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto"></i>'; lucide.createIcons();
-  
-  const { error } = await window.supa.auth.updateUser({ email: newEmail });
-  if(error) { btn.disabled = false; btn.innerHTML = 'Send Code'; return window.showToast(translateErr(error.message), 'error'); }
-  
-  window.showToast('Code sent to new email!', 'success');
-  document.getElementById('modal-email-input').disabled = true;
-  document.getElementById('modal-email-otp-box').classList.remove('hidden');
-  document.getElementById('modal-email-otp-box').classList.add('flex');
-  
-  let timeLeft = 60;
-  btn.classList.replace('bg-vIndigo', 'bg-slate-300'); btn.classList.add('dark:bg-slate-700', 'text-slate-500');
-  
-  window._emailTimerInterval = setInterval(() => {
-    timeLeft--;
-    if(timeLeft <= 0) {
-      clearInterval(window._emailTimerInterval);
-      btn.disabled = false; btn.innerHTML = 'Resend Code';
-      btn.classList.replace('bg-slate-300', 'bg-vIndigo'); btn.classList.remove('dark:bg-slate-700', 'text-slate-500');
-    } else { btn.innerHTML = `Resend available in ${timeLeft}s`; }
-  }, 1000);
-};
+window.unlinkProvider = async (provider) => {
+  try {
+    const { identities } = getIdentities();
+    if (identities.length <= 1) { window.showToast('Cannot unlink your only linked account', 'error'); return; }
+    const identity = identities.find(i => i.provider === provider);
+    if (!identity) return;
 
-window.verifyEmailChange = async () => {
-  const newEmail = document.getElementById('modal-email-input').value;
-  const otp = document.getElementById('modal-email-otp').value;
-  if(!otp) return window.showToast('Enter OTP', 'error');
-  
-  window.showToast(_t('verifying'), 'info');
-  const { error } = await window.supa.auth.verifyOtp({ email: newEmail, token: otp, type: 'email_change' });
-  
-  if(error) return window.showToast(translateErr(error.message), 'error');
-  
-  window.hideModal(); window.showToast('Email Updated Successfully!');
-  await window.loadProfile(); window.render();
+    const pin = await window.askPin('Confirm Unlink', `Enter PIN to unlink ${provider === 'google' ? 'Google' : 'GitHub'}`);
+    window.showToast(_t('verifying'), 'info');
+    await window.callApi('/api/pin', { action:'verify', pin, accessToken: window.session.access_token });
+
+    const { error } = await window.supa.auth.unlinkIdentity(identity);
+    if (error) throw error;
+
+    const currentChoice = getEmailChoice();
+    if (currentChoice === provider) {
+      const other = provider === 'google' ? 'github' : 'google';
+      localStorage.setItem('vault_email_choice_' + window.session.user.id, other);
+    }
+
+    const { data: { session: freshSession } } = await window.supa.auth.getSession();
+    if (freshSession) window.session = freshSession;
+
+    window.showToast('Account unlinked');
+    window.render();
+  } catch(e) {
+    if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error');
+  }
 };
 
 function buildProfile(){
   const p = window.profile || {};
-  const identities = window.session?.user?.identities || [];
-  const gId = identities.find(i => i.provider === 'google');
-  const ghId = identities.find(i => i.provider === 'github');
+  const { gId, ghId } = getIdentities();
+  const bothLinked = !!(gId && ghId);
+  const choice = getEmailChoice();
   
   return `
   <h2 class="disp text-2xl font-extrabold mb-5 flex items-center gap-2 tracking-tight mt-2"><i data-lucide="user-circle" class="w-6 h-6 text-vEmerald"></i> ${_t('profile')}</h2>
@@ -1114,15 +1112,28 @@ function buildProfile(){
       <input type="file" id="avatarInput" accept="image/*" class="hidden" onchange="window.initCropper(event)">
     </div>
     <h3 class="disp text-xl font-bold tracking-tight">${p.full_name || 'User'}</h3>
-    <p class="text-xs text-slate-500 font-medium mt-0.5 flex items-center justify-center gap-1.5">${window.session?.user?.email || p.email || ''} <button onclick="window.openEmailModal()" class="text-vIndigo hover:bg-vIndigo/10 p-1 rounded-md transition-colors"><i data-lucide="edit-2" class="w-3 h-3"></i></button></p>
+    <p class="text-xs text-slate-500 font-medium mt-0.5">${getDisplayEmail()}</p>
+    ${bothLinked ? `
+    <div class="flex justify-center gap-2 mt-3">
+      <button onclick="window.chooseEmail('google')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${choice==='google' ? 'bg-vEmerald text-[#04150c] border-vEmerald' : 'bg-white/40 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Use Google email</button>
+      <button onclick="window.chooseEmail('github')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${choice==='github' ? 'bg-vEmerald text-[#04150c] border-vEmerald' : 'bg-white/40 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Use GitHub email</button>
+    </div>` : ''}
   </div>
   
   <div class="glass rounded-[28px] p-5 mb-5 shadow-sm">
     <h4 class="text-[10px] font-bold uppercase text-slate-400 mb-4 tracking-widest">Linked Accounts</h4>
     <div class="space-y-3">
-      ${gId ? `<div class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5"><svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg> <div class="min-w-0"><p class="text-xs font-bold text-slate-800 dark:text-white">Google</p><p class="text-[10px] text-slate-500 truncate">${gId.identity_data.email}</p></div></div>` : `<button onclick="window.linkProvider('google')" class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5 w-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-600 dark:text-slate-300"><svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg> <span class="text-xs font-bold">+ Link Google Account</span></button>`}
+      ${gId ? `<div class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5">
+        <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
+        <div class="min-w-0 flex-1"><p class="text-xs font-bold text-slate-800 dark:text-white">Google</p><p class="text-[10px] text-slate-500 truncate">${gId.identity_data.email}</p></div>
+        <button onclick="window.unlinkProvider('google')" class="text-[10px] font-bold text-vRose hover:bg-vRose/10 px-2 py-1.5 rounded-lg transition-colors shrink-0">Unlink</button>
+      </div>` : `<button onclick="window.linkProvider('google')" class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5 w-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-600 dark:text-slate-300"><svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.9 12c0-.79.14-1.56.37-2.28V6.61H1.27A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg> <span class="text-xs font-bold">+ Link Google Account</span></button>`}
       
-      ${ghId ? `<div class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="text-slate-800 dark:text-white"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> <div class="min-w-0"><p class="text-xs font-bold text-slate-800 dark:text-white">GitHub</p><p class="text-[10px] text-slate-500 truncate">${ghId.identity_data.email}</p></div></div>` : `<button onclick="window.linkProvider('github')" class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5 w-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-600 dark:text-slate-300"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> <span class="text-xs font-bold">+ Link GitHub Account</span></button>`}
+      ${ghId ? `<div class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" class="text-slate-800 dark:text-white"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        <div class="min-w-0 flex-1"><p class="text-xs font-bold text-slate-800 dark:text-white">GitHub</p><p class="text-[10px] text-slate-500 truncate">${ghId.identity_data.email || ghId.identity_data.user_name || ''}</p></div>
+        <button onclick="window.unlinkProvider('github')" class="text-[10px] font-bold text-vRose hover:bg-vRose/10 px-2 py-1.5 rounded-lg transition-colors shrink-0">Unlink</button>
+      </div>` : `<button onclick="window.linkProvider('github')" class="flex items-center gap-3 bg-white/40 dark:bg-white/5 p-3 rounded-xl border border-white/20 dark:border-white/5 w-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors text-slate-600 dark:text-slate-300"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg> <span class="text-xs font-bold">+ Link GitHub Account</span></button>`}
     </div>
   </div>
 
@@ -1420,13 +1431,21 @@ window.openMasterKeyModal = () => {
 
 window._manageUsers = [];
 window._isManageLoading = false;
+window._manageLoaded = false;
+window._manageError = null;
 window.loadManageUsers = async () => {
   window._isManageLoading = true;
+  window._manageError = null;
   window.render();
   try {
-    const json = await fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action:'list_users' }) }).then(r=>r.json());
+    const res = await window.withTimeout(fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action:'list_users' }) }), 12000, 'Request timed out');
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed to load users');
     window._manageUsers = json.users || [];
-  } catch(e){}
+    window._manageLoaded = true;
+  } catch(e) {
+    window._manageError = translateErr(e.message) || 'Failed to load users';
+  }
   window._isManageLoading = false;
   window.render();
 };
@@ -1447,15 +1466,23 @@ window.confirmSuspend = async (id) => {
   const reason = document.getElementById('suspend-reason').value.trim();
   window.hideModal();
   window.showToast('Suspending...', 'info');
-  await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'suspend_user', payload: {id, reason}}) });
-  window.showToast('Suspended', 'success');
-  window.loadManageUsers();
+  try {
+    const res = await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'suspend_user', payload: {id, reason}}) });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed');
+    window.showToast('Suspended', 'success');
+    window.loadManageUsers();
+  } catch(e) { window.showToast(translateErr(e.message), 'error'); }
 };
 window.unsuspendUser = async (id) => {
   window.showToast('Unsuspending...', 'info');
-  await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'unsuspend_user', payload: {id}}) });
-  window.showToast('Unsuspended', 'success');
-  window.loadManageUsers();
+  try {
+    const res = await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'unsuspend_user', payload: {id}}) });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed');
+    window.showToast('Unsuspended', 'success');
+    window.loadManageUsers();
+  } catch(e) { window.showToast(translateErr(e.message), 'error'); }
 };
 window.banUser = async (id) => {
   try {
@@ -1465,36 +1492,72 @@ window.banUser = async (id) => {
     if (!p2) return;
     if (p1 !== p2) return window.showToast(_t('mismatch'), 'error');
     window.showToast('Banning user...', 'info');
-    await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'ban_user', payload: {id}}) });
+    const res = await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'ban_user', payload: {id}}) });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed');
     window.showToast('User banned & deleted', 'success');
     window.loadManageUsers();
-  } catch(e) { if(e.message !== 'cancelled') window.showToast('Error', 'error'); }
+  } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
+};
+
+window.showUserDetail = (id) => {
+  const u = window._manageUsers.find(x => x.id === id);
+  if (!u) return;
+  const avatar = u.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.full_name||'U')}`;
+  window.showModal(`
+    <div class="relative text-center">
+      <button onclick="window.hideModal()" class="absolute -top-4 -right-4 p-2 text-slate-400 hover:text-rose-500 transition-colors rounded-full bg-slate-100 dark:bg-white/5"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <img src="${avatar}" class="w-20 h-20 rounded-full mx-auto mb-3 border-2 border-vEmerald/30 object-cover shadow-md">
+      <h3 class="disp text-lg font-bold tracking-tight">${u.full_name || '—'}</h3>
+      <p class="text-xs text-slate-500 mb-6 break-all">${u.email || ''}</p>
+      <div class="space-y-3 text-left">
+        <div class="bg-white/50 dark:bg-black/20 p-4 rounded-2xl flex justify-between items-center gap-3 shadow-inner">
+          <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Total Income</span>
+          <span class="font-extrabold text-vEmerald text-lg disp break-all text-right">৳ ${bnNum(u.totalIncome || 0)}</span>
+        </div>
+        <div class="bg-white/50 dark:bg-black/20 p-4 rounded-2xl flex justify-between items-center gap-3 shadow-inner">
+          <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Total Expense</span>
+          <span class="font-extrabold text-vRose text-lg disp break-all text-right">৳ ${bnNum(u.totalExpense || 0)}</span>
+        </div>
+        <div class="bg-white/50 dark:bg-black/20 p-4 rounded-2xl flex justify-between items-center gap-3 shadow-inner">
+          <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Balance</span>
+          <span class="font-extrabold text-vGold text-lg disp break-all text-right">৳ ${bnNum(u.balance || 0)}</span>
+        </div>
+      </div>
+    </div>
+  `);
 };
 
 function buildManage(){
-  if (!window._manageUsers.length && !window._isManageLoading) setTimeout(window.loadManageUsers, 50);
+  if (!window._manageLoaded && !window._isManageLoading && !window._manageError) setTimeout(window.loadManageUsers, 50);
   
   let content = '';
-  if (window._isManageLoading && !window._manageUsers.length) {
+  if (window._isManageLoading && !window._manageLoaded) {
     content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[50vh]"><i data-lucide="loader-2" class="w-8 h-8 animate-spin mb-4 mx-auto text-vIndigo"></i>Fetching data...</div>`;
+  } else if (window._manageError) {
+    content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[40vh] gap-4">
+      <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto text-vRose"></i>
+      <p>${window._manageError}</p>
+      <button onclick="window.loadManageUsers()" class="px-5 py-2.5 rounded-xl bg-vIndigo text-white text-xs font-bold shadow-md active:scale-95 transition-transform">Retry</button>
+    </div>`;
   } else {
     content = window._manageUsers.map(u=>`
-      <div class="glass rounded-[24px] p-5 ${u.is_suspended?'border-amber-500/40 bg-amber-500/5':''} shadow-sm">
+      <div onclick="window.showUserDetail('${u.id}')" class="glass rounded-[24px] p-5 ${u.is_suspended?'border-amber-500/40 bg-amber-500/5':''} shadow-sm cursor-pointer active:scale-[0.99] transition-transform">
         <div class="flex items-center gap-3 mb-3">
-          <img src="${u.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(u.full_name||'U')}" class="w-11 h-11 rounded-full object-cover border shadow-sm">
+          <img src="${u.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(u.full_name||'U')}" class="w-11 h-11 rounded-full object-cover border shadow-sm shrink-0">
           <div class="min-w-0 flex-1"><p class="font-bold text-[13px] truncate">${u.full_name||'—'}</p><p class="text-[10px] text-slate-500 font-medium truncate">${u.email}</p></div>
         </div>
         <div class="grid grid-cols-3 gap-2 text-center">
-          <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">In</p><p class="font-bold text-vEmerald text-[13px]">৳${u.totalIncome}</p></div>
-          <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Out</p><p class="font-bold text-vRose text-[13px]">৳${u.totalExpense}</p></div>
-          <div class="bg-white/50 dark:bg-black/20 p-2.5 rounded-xl shadow-inner"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Bal</p><p class="font-bold text-vGold text-[13px]">৳${u.balance}</p></div>
+          <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">In</p><p class="font-bold text-vEmerald text-[11px] truncate" title="৳${u.totalIncome}">৳${bnNum(u.totalIncome)}</p></div>
+          <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Out</p><p class="font-bold text-vRose text-[11px] truncate" title="৳${u.totalExpense}">৳${bnNum(u.totalExpense)}</p></div>
+          <div class="bg-white/50 dark:bg-black/20 p-2 rounded-xl shadow-inner overflow-hidden"><p class="font-bold text-vGold text-[9px] uppercase mb-0.5">Bal</p><p class="font-bold text-vGold text-[11px] truncate" title="৳${u.balance}">৳${bnNum(u.balance)}</p></div>
         </div>
         <div class="flex gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
           ${u.is_suspended 
-            ? `<button onclick="window.unsuspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vEmerald/10 text-vEmerald hover:bg-vEmerald/20 text-[11px] font-bold transition-colors">Unsuspend</button>` 
-            : `<button onclick="window.suspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 hover:bg-amber-500/20 text-[11px] font-bold transition-colors">Suspend</button>`
+            ? `<button onclick="event.stopPropagation(); window.unsuspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vEmerald/10 text-vEmerald hover:bg-vEmerald/20 text-[11px] font-bold transition-colors">Unsuspend</button>` 
+            : `<button onclick="event.stopPropagation(); window.suspendUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 hover:bg-amber-500/20 text-[11px] font-bold transition-colors">Suspend</button>`
           }
-          <button onclick="window.banUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vRose/10 text-vRose hover:bg-vRose/20 text-[11px] font-bold transition-colors">Ban & Erase</button>
+          <button onclick="event.stopPropagation(); window.banUser('${u.id}')" class="flex-1 py-2 rounded-xl bg-vRose/10 text-vRose hover:bg-vRose/20 text-[11px] font-bold transition-colors">Ban & Erase</button>
         </div>
       </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">No users found.</div>`;
   }
