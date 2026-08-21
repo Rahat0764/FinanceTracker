@@ -2,10 +2,12 @@ const { getAdminClient, requireAdmin, sendTelegram, refId } = require('../lib/se
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!requireAdmin(req)) return res.status(401).json({ error: 'Admin session শেষ হয়ে গেছে, আবার Master Key দিন' });
+  const adminPayload = requireAdmin(req);
+  if (!adminPayload) return res.status(401).json({ error: 'Admin session শেষ হয়ে গেছে, আবার Master Key দিন' });
 
   const sb = getAdminClient();
   const { action, payload } = req.body || {};
+  const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
 
   try {
     switch (action) {
@@ -24,6 +26,7 @@ module.exports = async (req, res) => {
 
         const users = (profiles || []).map(p => ({
           ...p,
+          isAdmin: !!superEmail && (p.email || '').toLowerCase().trim() === superEmail,
           totalIncome: totals[p.id]?.income || 0,
           totalExpense: totals[p.id]?.expense || 0,
           balance: (totals[p.id]?.income || 0) - (totals[p.id]?.expense || 0),
@@ -34,6 +37,7 @@ module.exports = async (req, res) => {
       }
 
       case 'suspend_user': {
+        if (payload.id === adminPayload.uid) return res.status(400).json({ error: 'নিজের অ্যাকাউন্ট সাসপেন্ড করা যাবে না' });
         await sb.from('profiles').update({ is_suspended: true, suspend_reason: payload.reason || null }).eq('id', payload.id).throwOnError();
         await sendTelegram(`⛔ <b>User Suspended</b>\nID: ${payload.id}\nReason: ${payload.reason || '—'}`);
         return res.status(200).json({ ok: true });
@@ -46,6 +50,7 @@ module.exports = async (req, res) => {
       }
 
       case 'ban_user': {
+        if (payload.id === adminPayload.uid) return res.status(400).json({ error: 'নিজের অ্যাকাউন্ট ব্যান করা যাবে না' });
         const { error } = await sb.auth.admin.deleteUser(payload.id);
         if (error) throw error;
         await sendTelegram(`🚨 <b>User Banned & Deleted</b>\nID: ${payload.id}`);
@@ -69,6 +74,28 @@ module.exports = async (req, res) => {
         const { data, error } = await sb.from('transactions').select('*').eq('user_id', payload.user_id).order('txn_date', { ascending: false });
         if (error) throw error;
         return res.status(200).json({ transactions: data || [] });
+      }
+
+      case 'list_user_feedback': {
+        const { data: fb, error: fErr } = await sb.from('user_feedback').select('*').order('created_at', { ascending: false });
+        if (fErr) throw fErr;
+
+        const userIds = [...new Set((fb || []).map(f => f.user_id))];
+        let profilesMap = {};
+        if (userIds.length) {
+          const { data: profs, error: prErr } = await sb.from('profiles').select('*').in('id', userIds);
+          if (prErr) throw prErr;
+          (profs || []).forEach(p => { profilesMap[p.id] = p; });
+        }
+
+        const feedbackList = (fb || []).map(f => ({
+          ...f,
+          full_name: profilesMap[f.user_id]?.full_name || 'Unknown',
+          email: profilesMap[f.user_id]?.email || '',
+          avatar_url: profilesMap[f.user_id]?.avatar_url || ''
+        }));
+
+        return res.status(200).json({ feedback: feedbackList });
       }
 
       default:
