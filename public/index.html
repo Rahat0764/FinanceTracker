@@ -80,7 +80,7 @@ tailwind.config = {
   .dot.filled{background:#12b76a;box-shadow:0 0 12px rgba(18,183,106,.6)}
   #root { width: 100%; min-height: 100dvh; display: flex; flex-direction: column; }
   .pull-spin{animation:spin .7s linear infinite}
-  .fab-sub{transition:opacity .25s cubic-bezier(.16,1,.3,1), transform .25s cubic-bezier(.16,1,.3,1)}
+  .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 </style>
 </head>
 <body class="text-slate-900 dark:text-slate-100 flex flex-col h-full w-full relative">
@@ -202,6 +202,17 @@ window.withTimeout = (promise, ms, errorMsg = 'Request timed out') => {
   ]);
 };
 
+function badgeText(n){ return n > 9 ? '9+' : String(n); }
+function starsHtml(rating){
+  if (!rating) return '';
+  let out = '<div class="flex gap-0.5 justify-center mb-2">';
+  for (let i=1;i<=5;i++){
+    out += `<svg class="w-4 h-4 ${i<=rating?'text-vGold':'text-slate-300 dark:text-slate-700'}" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14l-5-4.87 7.1-1.01L12 2z"/></svg>`;
+  }
+  out += '</div>';
+  return out;
+}
+
 window.supa = null; window.session = null; window.profile = null;
 window.adminToken = localStorage.getItem('vault_admin_token') || null;
 window.activeTab = localStorage.getItem('vault_tab') || 'dashboard';
@@ -214,7 +225,14 @@ window._pinVerified = false;
 window._pinFlowActive = false; 
 window._pinModalOpen = false;
 window._feedbackOpen = false;
+window._fabDocked = false;
 window._refreshing = false;
+window._historySort = 'date';
+window._feedbackRatingFilter = 'all';
+window._feedbackSortMode = 'newest';
+window._feedbackRating = 0;
+window._myFeedback = [];
+window._myFeedbackUnreadCount = 0;
 
 const BN_DAYS = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
 const BN_MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
@@ -344,6 +362,12 @@ window.callApi = async (path, body) => {
   const res = await window.withTimeout(fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) }), 8000);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Server Error');
+  return json;
+};
+window.adminApi = async (action, payload) => {
+  const res = await window.withTimeout(fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action, payload: payload || {} }) }), 12000, 'Request timed out');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed');
   return json;
 };
 window.notify = (event, details) => { if (window.session) window.callApi('/api/notify', { event, accessToken: window.session.access_token, details }).catch(()=>{}); };
@@ -490,6 +514,19 @@ window.loadTxns = async (silent = false) => {
   }
 };
 
+async function silentFetchTxnsAndProfile(){
+  const userId = window.session?.user?.id;
+  if (!userId) return;
+  try {
+    const { data, error } = await window.supa.from('transactions').select('*').eq('user_id', userId).order('txn_date', { ascending: false }).order('created_at', { ascending: false });
+    if (!error && window.session && window.session.user.id === userId) window.txns = data || [];
+  } catch(e) {}
+  try {
+    const { data, error } = await window.supa.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (!error && data && window.session && window.session.user.id === userId) window.profile = data;
+  } catch(e) {}
+}
+
 function getIdentities() {
   const identities = window.session?.user?.identities || [];
   const gId = identities.find(i => i.provider === 'google');
@@ -567,6 +604,7 @@ window.render = () => {
   lucide.createIcons(); 
   updateNav();
   attachPullRefresh();
+  attachFabDrag();
 
   if (window.activeTab === 'add') {
     document.documentElement.style.setProperty('--focus-color', window._entryType === 'income' ? '#12b76a' : '#f2495c');
@@ -719,10 +757,12 @@ function buildSuspended(){
 }
 
 function buildFeedbackFab(){
-  const open = window._feedbackOpen;
   return `
-  <div class="md:hidden fixed bottom-24 right-5 z-40 flex flex-col items-end gap-3">
-    <div class="fab-sub flex flex-col items-end gap-3 ${open ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}">
+  <div id="feedbackFabWrap" class="md:hidden fixed z-40 flex flex-col items-end" style="right:20px; bottom:96px;">
+    <div id="fabLabel" class="mb-2" style="opacity:0; transition:opacity .3s ease;">
+      <span class="px-3 py-1 rounded-full bg-slate-900/80 dark:bg-black/70 text-white text-[10px] font-bold whitespace-nowrap">ফিডব্যাক</span>
+    </div>
+    <div id="feedbackSubButtons" class="flex flex-col items-end gap-3 mb-3 opacity-0 translate-y-4 pointer-events-none transition-all duration-300">
       <button onclick="window.openWhatsappFeedback()" class="w-12 h-12 rounded-full bg-[#25D366] shadow-lg flex items-center justify-center active:scale-90 transition-transform" title="WhatsApp">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.3-1.39a9.9 9.9 0 0 0 4.69 1.19h.01c5.46 0 9.9-4.45 9.9-9.91C21.96 6.45 17.5 2 12.04 2zm5.79 14.02c-.24.68-1.4 1.3-1.93 1.35-.49.05-1.11.07-1.79-.12-.41-.12-.94-.29-1.62-.57-2.85-1.23-4.71-4.09-4.85-4.28-.14-.19-1.16-1.54-1.16-2.94s.73-2.09.99-2.38c.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.41-.07.64.49.24.57.81 1.98.88 2.13.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.13.57.17.29.75 1.24 1.62 2.01 1.11.99 2.05 1.3 2.34 1.44.29.14.46.12.63-.07.17-.19.71-.83.9-1.11.19-.29.38-.24.64-.14.26.1 1.66.78 1.94.92.29.14.48.21.55.33.07.12.07.7-.17 1.38z"/></svg>
       </button>
@@ -730,26 +770,107 @@ function buildFeedbackFab(){
         <i data-lucide="message-square-text" class="w-5 h-5 text-white"></i>
       </button>
     </div>
-    <button onclick="window.toggleFeedbackMenu()" class="w-14 h-14 rounded-full bg-vEmerald shadow-xl flex items-center justify-center active:scale-90 transition-transform">
-      <i data-lucide="${open ? 'x' : 'message-circle'}" class="w-6 h-6 text-[#04150c]"></i>
+    <button id="feedbackMainBtn" class="w-14 h-14 rounded-full bg-vEmerald/55 backdrop-blur-md shadow-xl flex items-center justify-center active:scale-90 transition-transform touch-none border border-white/25">
+      <i data-lucide="message-circle" id="feedbackMainIcon" class="w-6 h-6 text-[#04150c]"></i>
     </button>
   </div>`;
 }
-window.toggleFeedbackMenu = () => { window._feedbackOpen = !window._feedbackOpen; window.render(); };
+
+function updateFabUI(){
+  const wrap = document.getElementById('feedbackFabWrap');
+  if (!wrap) return;
+  const sub = document.getElementById('feedbackSubButtons');
+  const label = document.getElementById('fabLabel');
+  const icon = document.getElementById('feedbackMainIcon');
+  const open = window._feedbackOpen;
+
+  wrap.style.transition = 'right .3s cubic-bezier(.16,1,.3,1)';
+  wrap.style.right = (window._fabDocked && !open) ? '-26px' : '20px';
+
+  if (sub) {
+    if (open) {
+      sub.classList.remove('opacity-0','translate-y-4','pointer-events-none');
+      sub.classList.add('opacity-100','translate-y-0','pointer-events-auto');
+    } else {
+      sub.classList.add('opacity-0','translate-y-4','pointer-events-none');
+      sub.classList.remove('opacity-100','translate-y-0','pointer-events-auto');
+    }
+  }
+  if (label) label.style.opacity = open ? '1' : '0';
+  if (icon) {
+    icon.setAttribute('data-lucide', open ? 'x' : 'message-circle');
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function attachFabDrag(){
+  const wrap = document.getElementById('feedbackFabWrap');
+  const btn = document.getElementById('feedbackMainBtn');
+  if (!wrap || !btn) return;
+
+  const savedBottom = localStorage.getItem('vault_fab_bottom');
+  window._fabDocked = localStorage.getItem('vault_fab_docked') === 'true';
+  if (savedBottom) wrap.style.bottom = savedBottom + 'px';
+  window._feedbackOpen = false;
+  updateFabUI();
+
+  let dragging = false, moved = false, startX = 0, startY = 0;
+
+  btn.addEventListener('pointerdown', (e) => {
+    dragging = true; moved = false;
+    startX = e.clientX; startY = e.clientY;
+    wrap.style.transition = 'none';
+    try { btn.setPointerCapture(e.pointerId); } catch(err){}
+  });
+
+  btn.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX; const dy = e.clientY - startY;
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) moved = true;
+    if (moved) {
+      const newBottom = Math.min(Math.max(window.innerHeight - e.clientY - 28, 90), window.innerHeight - 140);
+      wrap.style.bottom = newBottom + 'px';
+    }
+  });
+
+  btn.addEventListener('pointerup', (e) => {
+    dragging = false;
+    wrap.style.transition = 'right .3s cubic-bezier(.16,1,.3,1), bottom .3s cubic-bezier(.16,1,.3,1)';
+    if (moved) {
+      const dockRight = e.clientX > window.innerWidth * 0.55;
+      window._fabDocked = dockRight;
+      window._feedbackOpen = false;
+      localStorage.setItem('vault_fab_docked', String(dockRight));
+      localStorage.setItem('vault_fab_bottom', String(parseInt(wrap.style.bottom, 10) || 96));
+      updateFabUI();
+    } else {
+      window._feedbackOpen = !window._feedbackOpen;
+      updateFabUI();
+    }
+  });
+
+  btn.addEventListener('pointercancel', () => { dragging = false; });
+}
+
+window.toggleFeedbackMenu = () => { window._feedbackOpen = !window._feedbackOpen; updateFabUI(); };
 window.openWhatsappFeedback = () => {
-  window._feedbackOpen = false; window.render();
+  window._feedbackOpen = false; updateFabUI();
   const link = window.CFG?.developerWhatsapp;
   if (!link) { window.showToast('WhatsApp link not configured', 'error'); return; }
   window.open(link, '_blank');
 };
 window.openInAppFeedback = () => {
-  window._feedbackOpen = false; window.render();
+  window._feedbackOpen = false; updateFabUI();
+  window._feedbackRating = 0;
   window.showModal(`
     <div class="text-center">
       <div class="w-14 h-14 bg-vIndigo/10 text-vIndigo rounded-full flex items-center justify-center mx-auto mb-3 border border-vIndigo/20"><i data-lucide="message-square-text" class="w-6 h-6"></i></div>
       <h3 class="disp font-bold text-xl mb-1">Send Feedback</h3>
-      <p class="text-xs text-slate-500 mb-4">Tell us what's on your mind. It goes straight to the developer.</p>
-      <textarea id="feedback-text" placeholder="Write your feedback..." class="w-full px-4 py-3 rounded-2xl glass-input dyn-focus text-[13px] outline-none mb-4 min-h-[110px]"></textarea>
+      <p class="text-xs text-slate-500 mb-3">Tell us what's on your mind. It goes straight to the developer.</p>
+      <div class="flex justify-center gap-1.5 mb-4" id="feedback-stars">
+        ${[1,2,3,4,5].map(i=>`<svg data-star="${i}" onclick="window.setFeedbackRating(${i})" class="w-6 h-6 cursor-pointer text-slate-300 dark:text-slate-600 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14l-5-4.87 7.1-1.01L12 2z"/></svg>`).join('')}
+      </div>
+      <textarea id="feedback-text" placeholder="Write your feedback... (rating optional)" class="w-full px-4 py-3 rounded-2xl glass-input dyn-focus text-[13px] outline-none mb-4 min-h-[110px]"></textarea>
       <div class="flex gap-3">
         <button onclick="window.hideModal()" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold active:scale-95 transition-transform">Cancel</button>
         <button onclick="window.submitFeedback()" class="flex-1 py-3 bg-vIndigo text-white rounded-xl font-bold shadow-lg shadow-vIndigo/20 active:scale-95 transition-transform">Send</button>
@@ -757,30 +878,87 @@ window.openInAppFeedback = () => {
     </div>
   `);
 };
+window.setFeedbackRating = (n) => {
+  window._feedbackRating = n;
+  document.querySelectorAll('#feedback-stars svg').forEach(el => {
+    const v = Number(el.dataset.star);
+    if (v <= n) { el.classList.add('text-vGold'); el.classList.remove('text-slate-300','dark:text-slate-600'); }
+    else { el.classList.remove('text-vGold'); el.classList.add('text-slate-300','dark:text-slate-600'); }
+  });
+};
 window.submitFeedback = async () => {
   const msg = document.getElementById('feedback-text').value.trim();
   if (!msg) { window.showToast('Write something first', 'error'); return; }
   window.showToast('Sending...', 'info');
   try {
-    await window.callApi('/api/feedback', { action: 'submit', message: msg, accessToken: window.session.access_token });
+    await window.callApi('/api/feedback', { action: 'submit', message: msg, rating: window._feedbackRating || null, accessToken: window.session.access_token });
     window.hideModal();
     window.showToast('Thank you! Feedback sent.');
   } catch(e) { window.showToast(translateErr(e.message), 'error'); }
 };
 
+window._myFeedback = [];
+window._myFeedbackUnreadCount = 0;
+window.refreshMyFeedbackBadge = async () => {
+  try {
+    const json = await window.callApi('/api/feedback', { action: 'list_own', accessToken: window.session.access_token });
+    window._myFeedback = json.feedback || [];
+    window._myFeedbackUnreadCount = window._myFeedback.filter(f => f.admin_reply && !f.reply_seen).length;
+  } catch(e) {}
+};
+window.openMyFeedback = async () => {
+  window.showModal(`<div class="text-center p-8"><i data-lucide="loader-2" class="w-6 h-6 animate-spin mx-auto text-vIndigo"></i></div>`);
+  await window.refreshMyFeedbackBadge();
+  const list = window._myFeedback;
+  const html = list.length ? list.map(f => `
+    <div class="bg-white/50 dark:bg-black/20 p-4 rounded-2xl mb-3 text-left shadow-inner">
+      ${f.rating ? starsHtml(f.rating) : ''}
+      <p class="text-sm text-slate-700 dark:text-slate-300 mb-2">${f.message}</p>
+      ${f.admin_reply ? `
+        <div class="mt-2 pt-2 border-t border-slate-200 dark:border-white/10">
+          <p class="text-[10px] font-bold text-vIndigo uppercase mb-1">Developer Reply</p>
+          <p class="text-sm text-slate-600 dark:text-slate-400">${f.admin_reply}</p>
+        </div>
+      ` : `<p class="text-[10px] text-slate-400 italic">Awaiting reply...</p>`}
+      <p class="text-[9px] text-slate-400 mt-2">${new Date(f.created_at).toLocaleDateString()}</p>
+    </div>
+  `).join('') : `<p class="text-sm text-slate-500 text-center py-6">You haven't sent any feedback yet.</p>`;
+
+  window.showModal(`
+    <div class="relative">
+      <button onclick="window.hideModal()" class="absolute -top-4 -right-4 p-2 text-slate-400 hover:text-rose-500 transition-colors rounded-full bg-slate-100 dark:bg-white/5"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <h3 class="disp font-bold text-xl mb-4 text-center">My Feedback</h3>
+      ${html}
+    </div>
+  `);
+
+  if (window._myFeedbackUnreadCount > 0) {
+    try { await window.callApi('/api/feedback', { action: 'mark_reply_seen', accessToken: window.session.access_token }); } catch(e){}
+    window._myFeedbackUnreadCount = 0;
+    const badge = document.getElementById('myFeedbackBadge');
+    if (badge) badge.remove();
+    const navBadge = document.getElementById('navProfileBadge');
+    if (navBadge) navBadge.remove();
+  }
+};
+
 function buildShell(innerHtml){
   const p = window.profile || {}; const isSuper = window.adminToken;
+  const manageUnread = window._manageFeedback.filter(f=>!f.is_read).length;
   const navItems = [
-    { id: 'dashboard', icon: 'layout-dashboard', label: _t('dashboard') },
-    { id: 'add', icon: 'plus-circle', label: _t('add') },
-    { id: 'history', icon: 'history', label: _t('history') },
-    ...(isSuper ? [{ id: 'manage', icon: 'shield', label: _t('manage') }] : []),
-    { id: 'profile', icon: 'user-circle', label: _t('profile') }
+    { id: 'dashboard', icon: 'layout-dashboard', label: _t('dashboard'), badge: 0 },
+    { id: 'add', icon: 'plus-circle', label: _t('add'), badge: 0 },
+    { id: 'history', icon: 'history', label: _t('history'), badge: 0 },
+    ...(isSuper ? [{ id: 'manage', icon: 'shield', label: _t('manage'), badge: manageUnread }] : []),
+    { id: 'profile', icon: 'user-circle', label: _t('profile'), badge: window._myFeedbackUnreadCount }
   ];
 
   const navButtons = navItems.map(n => `
     <button class="nav-btn w-full md:w-auto md:px-4 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 flex-1 md:flex-none py-1.5 md:py-3.5 mx-0.5 md:mx-0 md:mb-2 transition-all md:rounded-2xl outline-none" onclick="window.changeTab('${n.id}')" data-tab="${n.id}">
-      <i data-lucide="${n.icon}" class="w-5 h-5 md:w-5 md:h-5"></i>
+      <span class="relative inline-block">
+        <i data-lucide="${n.icon}" class="w-5 h-5 md:w-5 md:h-5"></i>
+        ${n.badge > 0 ? `<span ${n.id==='profile'?'id="navProfileBadge"':''} class="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-1 rounded-full bg-vRose text-white text-[8px] font-bold flex items-center justify-center leading-none">${badgeText(n.badge)}</span>` : ''}
+      </span>
       <span class="text-[9px] md:text-[13px] disp font-bold uppercase md:capitalize tracking-wider md:tracking-normal">${n.label}</span>
     </button>
   `).join('');
@@ -818,7 +996,7 @@ function buildShell(innerHtml){
       ${getDevCreditBar()}
       
       <main class="flex-1 overflow-y-auto w-full pb-28 md:pb-10 pt-4 px-4 md:px-8 fade-in hide-scrollbar relative block h-full">
-        <div id="pullIndicator" class="fixed top-16 left-1/2 z-30 opacity-0" style="transform:translate(-50%,-40px);transition:opacity .2s ease;">
+        <div id="pullIndicator" class="fixed top-16 left-1/2 z-30 opacity-0" style="transform:translate(-50%,-40px);">
           <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-vEmerald to-vGold flex items-center justify-center shadow-lg border-2 border-white dark:border-[#0a0a0a]">
             <i data-lucide="vault" id="pullIndicatorIcon" class="w-5 h-5 text-[#04150c]"></i>
           </div>
@@ -838,6 +1016,11 @@ function buildShell(innerHtml){
   `;
 }
 
+async function silentSpinToggle(icon, on){
+  if (!icon) return;
+  if (on) icon.classList.add('pull-spin'); else icon.classList.remove('pull-spin');
+}
+
 function attachPullRefresh(){
   const main = document.querySelector('main');
   const indicator = document.getElementById('pullIndicator');
@@ -853,24 +1036,31 @@ function attachPullRefresh(){
     if (!pulling) return;
     const dy = e.touches[0].clientY - startY;
     if (dy > 0 && main.scrollTop <= 0) {
-      currentPull = Math.min(dy, 100);
-      indicator.style.opacity = String(Math.min(currentPull / 70, 1));
-      indicator.style.transform = `translate(-50%, ${currentPull - 44}px) rotate(${currentPull * 3}deg)`;
+      currentPull = Math.min(dy * 0.5, 80);
+      indicator.style.transition = 'none';
+      indicator.style.opacity = String(Math.min(currentPull / 60, 1));
+      indicator.style.transform = `translate(-50%, ${currentPull - 44}px) rotate(${currentPull * 4}deg)`;
     }
   }, { passive: true });
 
   main.addEventListener('touchend', async () => {
-    if (pulling && currentPull > 70 && !window._refreshing) {
+    if (pulling && currentPull > 55 && !window._refreshing) {
       window._refreshing = true;
+      indicator.style.transition = 'transform .25s cubic-bezier(.16,1,.3,1), opacity .25s ease';
       indicator.style.opacity = '1';
-      indicator.style.transform = 'translate(-50%, 16px)';
-      if (icon) icon.classList.add('pull-spin');
-      await window.loadTxns(true);
-      await window.loadProfile();
+      indicator.style.transform = 'translate(-50%, 20px)';
+      silentSpinToggle(icon, true);
+
+      await silentFetchTxnsAndProfile();
+
       window._refreshing = false;
+      indicator.style.opacity = '0';
+      indicator.style.transform = 'translate(-50%, -40px)';
+      silentSpinToggle(icon, false);
       window.render();
       window.showToast('Refreshed', 'success');
     } else {
+      indicator.style.transition = 'transform .25s cubic-bezier(.16,1,.3,1), opacity .25s ease';
       indicator.style.opacity = '0';
       indicator.style.transform = 'translate(-50%, -40px)';
     }
@@ -1075,17 +1265,28 @@ window.submitEntry = async () => {
 };
 
 window._historyFilter = 'all'; window._historySearch = '';
+window.setHistorySort = (v) => { window._historySort = v; window.render(); };
 function buildHistory(){
   let list = window.txns.filter(t => window._historyFilter==='all' || t.type===window._historyFilter);
   if (window._historySearch) { const q = window._historySearch.toLowerCase(); list = list.filter(t => (t.category+' '+t.ref_id+' '+(t.note||'')).toLowerCase().includes(q)); }
+  list = list.slice();
+  if (window._historySort === 'entry') {
+    list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  } else {
+    list.sort((a,b) => (new Date(b.txn_date) - new Date(a.txn_date)) || (new Date(b.created_at) - new Date(a.created_at)));
+  }
   return `
   <h2 class="disp text-2xl font-extrabold mb-4 flex items-center gap-2 tracking-tight mt-2"><i data-lucide="history" class="w-6 h-6 text-vEmerald"></i> ${_t('history_title')}</h2>
-  <div class="flex gap-2 mb-4">
+  <div class="flex gap-2 mb-3">
     ${['all','income','expense'].map(f=> `<button type="button" onclick="window._historyFilter='${f}'; window.render();" class="px-4 py-2 rounded-xl text-[11px] font-bold border transition-colors ${window._historyFilter===f?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">${f==='all'?_t('all'):(f==='income'?_t('income'):_t('expense'))}</button>`).join('')}
     <div class="relative flex-1">
       <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
       <input oninput="window._historySearch=this.value; window.render();" value="${window._historySearch}" placeholder="${_t('search')}" class="w-full pl-9 pr-3 py-2 rounded-xl glass-input dyn-focus text-xs font-medium outline-none transition-colors shadow-inner">
     </div>
+  </div>
+  <div class="flex gap-2 mb-4">
+    <button onclick="window.setHistorySort('date')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${window._historySort==='date'?'bg-vIndigo text-white border-vIndigo':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Sort: Date</button>
+    <button onclick="window.setHistorySort('entry')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${window._historySort==='entry'?'bg-vIndigo text-white border-vIndigo':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Sort: Entry</button>
   </div>
   <div class="glass rounded-[24px] overflow-hidden shadow-sm">
     <div class="divide-y divide-slate-100/50 dark:divide-white/5">
@@ -1310,6 +1511,10 @@ function buildProfile(){
   </div>
 
   <div class="glass rounded-[28px] p-5 mb-5 space-y-3 shadow-sm">
+    <button type="button" onclick="window.openMyFeedback()" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm relative">
+      <i data-lucide="message-square-text" class="w-4 h-4 text-vIndigo"></i> My Feedback
+      ${window._myFeedbackUnreadCount > 0 ? `<span id="myFeedbackBadge" class="ml-1 px-2 py-0.5 rounded-full bg-vRose text-white text-[10px] font-bold">${badgeText(window._myFeedbackUnreadCount)}</span>` : ''}
+    </button>
     <button type="button" onclick="window.lang=window.lang==='bn'?'en':'bn'; localStorage.setItem('vault_lang',window.lang); document.documentElement.lang=window.lang; window.render();" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="languages" class="w-4 h-4 text-vIndigo"></i> ${_t('lang_switch')}</button>
     <button type="button" onclick="window.changePin()" class="w-full py-3.5 glass-input rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 hover:bg-white/60 dark:hover:bg-white/10 transition-colors shadow-sm"><i data-lucide="key-round" class="w-4 h-4 text-vGold"></i> ${_t('change_pin')}</button>
     ${(!window.isApp && window.CFG?.apkUrl) ? `<a href="${window.CFG.apkUrl}" class="w-full py-3.5 bg-vEmerald text-[#04150c] rounded-2xl font-bold text-[13px] flex items-center justify-center gap-2 mb-5 shadow-lg active:scale-95 transition-all"><i data-lucide="download" class="w-4 h-4"></i> Install App</a>` : ''}
@@ -1604,6 +1809,7 @@ window.openMasterKeyModal = () => {
       const masterKey = document.getElementById('masterKeyInput').value; window.showToast('Verifying...', 'info');
       const json = await window.callApi('/api/master-verify', { masterKey, accessToken: window.session.access_token });
       window.adminToken = json.token; localStorage.setItem('vault_admin_token', json.token); window.hideModal(); window.changeTab('manage');
+      window.loadManageFeedback();
     } catch(e){ window.showToast(translateErr(e.message), 'error'); }
   };
 };
@@ -1618,9 +1824,7 @@ window.loadManageUsers = async () => {
   window._manageError = null;
   window.render();
   try {
-    const res = await window.withTimeout(fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action:'list_users' }) }), 12000, 'Request timed out');
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed to load users');
+    const json = await window.adminApi('list_users', {});
     window._manageUsers = json.users || [];
     window._manageLoaded = true;
   } catch(e) {
@@ -1639,9 +1843,7 @@ window.loadManageFeedback = async () => {
   window._feedbackError = null;
   window.render();
   try {
-    const res = await window.withTimeout(fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json','x-admin-token':window.adminToken}, body: JSON.stringify({ action:'list_user_feedback' }) }), 12000, 'Request timed out');
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed to load feedback');
+    const json = await window.adminApi('list_user_feedback', {});
     window._manageFeedback = json.feedback || [];
     window._feedbackLoaded = true;
   } catch(e) {
@@ -1670,9 +1872,7 @@ window.confirmSuspend = async (id) => {
   window.hideModal();
   window.showToast('Suspending...', 'info');
   try {
-    const res = await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'suspend_user', payload: {id, reason}}) });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed');
+    await window.adminApi('suspend_user', { id, reason });
     window.showToast('Suspended', 'success');
     window.loadManageUsers();
   } catch(e) { window.showToast(translateErr(e.message), 'error'); }
@@ -1680,9 +1880,7 @@ window.confirmSuspend = async (id) => {
 window.unsuspendUser = async (id) => {
   window.showToast('Unsuspending...', 'info');
   try {
-    const res = await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'unsuspend_user', payload: {id}}) });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed');
+    await window.adminApi('unsuspend_user', { id });
     window.showToast('Unsuspended', 'success');
     window.loadManageUsers();
   } catch(e) { window.showToast(translateErr(e.message), 'error'); }
@@ -1695,9 +1893,7 @@ window.banUser = async (id) => {
     if (!p2) return;
     if (p1 !== p2) return window.showToast(_t('mismatch'), 'error');
     window.showToast('Banning user...', 'info');
-    const res = await fetch('/api/admin', { method: 'POST', headers: {'Content-Type':'application/json', 'x-admin-token': window.adminToken}, body: JSON.stringify({action: 'ban_user', payload: {id}}) });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed');
+    await window.adminApi('ban_user', { id });
     window.showToast('User banned & deleted', 'success');
     window.loadManageUsers();
   } catch(e) { if(e.message !== 'cancelled') window.showToast(translateErr(e.message), 'error'); }
@@ -1731,23 +1927,133 @@ window.showUserDetail = (id) => {
   `);
 };
 
-window.showFeedbackDetail = (id) => {
+window.setFeedbackRatingFilter = (v) => { window._feedbackRatingFilter = v; window.render(); };
+window.setFeedbackSortMode = (v) => { window._feedbackSortMode = v; window.render(); };
+
+window.showFeedbackDetail = async (id) => {
   const f = window._manageFeedback.find(x => x.id === id);
   if (!f) return;
+  if (!f.is_read) {
+    try { await window.adminApi('mark_feedback_read', { id }); f.is_read = true; } catch(e){}
+  }
   const avatar = f.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(f.full_name||'U')}`;
   window.showModal(`
     <div class="relative">
       <button onclick="window.hideModal()" class="absolute -top-4 -right-4 p-2 text-slate-400 hover:text-rose-500 transition-colors rounded-full bg-slate-100 dark:bg-white/5"><i data-lucide="x" class="w-4 h-4"></i></button>
-      <div class="flex items-center gap-3 mb-4">
+      <div class="flex items-center gap-3 mb-3">
         <img src="${avatar}" class="w-12 h-12 rounded-full object-cover border-2 border-vIndigo/30 shadow-sm shrink-0">
         <div class="min-w-0"><p class="font-bold text-sm">${f.full_name}</p><p class="text-[11px] text-slate-500 truncate">${f.email}</p></div>
       </div>
+      ${f.rating ? starsHtml(f.rating) : ''}
       <div class="bg-slate-100 dark:bg-white/5 p-4 rounded-2xl border border-slate-200 dark:border-white/10 mb-3">
         <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">${f.message}</p>
       </div>
-      <p class="text-[10px] text-slate-400">${new Date(f.created_at).toLocaleString()}</p>
+      <p class="text-[10px] text-slate-400 mb-4">${new Date(f.created_at).toLocaleString()}</p>
+      ${f.admin_reply ? `
+        <div class="bg-vIndigo/5 border border-vIndigo/20 p-3 rounded-xl mb-3">
+          <p class="text-[10px] font-bold text-vIndigo uppercase mb-1">Your Reply</p>
+          <p class="text-sm text-slate-700 dark:text-slate-300">${f.admin_reply}</p>
+        </div>
+      ` : ''}
+      <textarea id="admin-reply-text" placeholder="${f.admin_reply?'Update reply...':'Write a reply...'}" class="w-full px-4 py-3 rounded-2xl glass-input dyn-focus text-[13px] outline-none mb-3 min-h-[80px]"></textarea>
+      <div class="flex gap-2 mb-1">
+        <button onclick="window.submitFeedbackReply('${id}')" class="flex-1 py-2.5 bg-vIndigo text-white rounded-xl font-bold text-[13px] shadow-md active:scale-95 transition-transform">${f.admin_reply?'Update Reply':'Send Reply'}</button>
+        <button onclick="window.deleteFeedbackItem('${id}')" class="px-4 py-2.5 bg-vRose/10 text-vRose rounded-xl font-bold text-[13px] active:scale-95 transition-transform">Delete</button>
+      </div>
     </div>
   `);
+  window.render();
+};
+
+window.submitFeedbackReply = async (id) => {
+  const text = document.getElementById('admin-reply-text').value.trim();
+  if (!text) { window.showToast('Write a reply first', 'error'); return; }
+  window.showToast('Sending reply...', 'info');
+  try {
+    await window.adminApi('reply_user_feedback', { id, reply: text });
+    const f = window._manageFeedback.find(x => x.id === id);
+    if (f) { f.admin_reply = text; f.reply_at = new Date().toISOString(); f.reply_seen = false; f.is_read = true; }
+    window.hideModal();
+    window.showToast('Reply sent!');
+    window.render();
+  } catch(e) { window.showToast(translateErr(e.message), 'error'); }
+};
+
+window.deleteFeedbackItem = (id) => {
+  window.showModal(`
+    <div class="text-center">
+      <div class="w-14 h-14 bg-vRose/10 text-vRose rounded-full flex items-center justify-center mx-auto mb-3 border border-vRose/20"><i data-lucide="trash-2" class="w-6 h-6"></i></div>
+      <h3 class="disp font-bold text-xl mb-2">Delete Feedback?</h3>
+      <p class="text-xs text-slate-500 mb-5">This cannot be undone.</p>
+      <div class="flex gap-3">
+        <button onclick="window.hideModal()" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold active:scale-95 transition-transform">Cancel</button>
+        <button onclick="window.confirmDeleteFeedback('${id}')" class="flex-1 py-3 bg-vRose text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">Delete</button>
+      </div>
+    </div>
+  `);
+};
+window.confirmDeleteFeedback = async (id) => {
+  window.hideModal();
+  try {
+    await window.adminApi('delete_user_feedback', { id });
+    window._manageFeedback = window._manageFeedback.filter(f => f.id !== id);
+    window.showToast('Deleted');
+    window.render();
+  } catch(e) { window.showToast(translateErr(e.message), 'error'); }
+};
+window.deleteAllFeedback = () => {
+  window.showModal(`
+    <div class="text-center">
+      <div class="w-14 h-14 bg-vRose/10 text-vRose rounded-full flex items-center justify-center mx-auto mb-3 border border-vRose/20"><i data-lucide="trash-2" class="w-6 h-6"></i></div>
+      <h3 class="disp font-bold text-xl mb-2">Delete All Feedback?</h3>
+      <p class="text-xs text-slate-500 mb-5">All feedback entries will be permanently removed.</p>
+      <div class="flex gap-3">
+        <button onclick="window.hideModal()" class="flex-1 py-3 bg-slate-200 dark:bg-white/10 rounded-xl font-bold active:scale-95 transition-transform">Cancel</button>
+        <button onclick="window.confirmDeleteAllFeedback()" class="flex-1 py-3 bg-vRose text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">Delete All</button>
+      </div>
+    </div>
+  `);
+};
+window.confirmDeleteAllFeedback = async () => {
+  window.hideModal();
+  try {
+    await window.adminApi('delete_all_user_feedback', {});
+    window._manageFeedback = [];
+    window.showToast('All feedback deleted');
+    window.render();
+  } catch(e) { window.showToast(translateErr(e.message), 'error'); }
+};
+window.markFeedbackRead = async (id, e) => {
+  if (e) e.stopPropagation();
+  try {
+    await window.adminApi('mark_feedback_read', { id });
+    const f = window._manageFeedback.find(x=>x.id===id); if(f) f.is_read = true;
+    window.render();
+  } catch(err) { window.showToast(translateErr(err.message), 'error'); }
+};
+window.markFeedbackUnread = async (id, e) => {
+  if (e) e.stopPropagation();
+  try {
+    await window.adminApi('mark_feedback_unread', { id });
+    const f = window._manageFeedback.find(x=>x.id===id); if(f) f.is_read = false;
+    window.render();
+  } catch(err) { window.showToast(translateErr(err.message), 'error'); }
+};
+window.markAllFeedbackRead = async () => {
+  try {
+    await window.adminApi('mark_all_feedback_read', {});
+    window._manageFeedback.forEach(f=>f.is_read=true);
+    window.showToast('All marked as read');
+    window.render();
+  } catch(err) { window.showToast(translateErr(err.message), 'error'); }
+};
+window.markAllFeedbackUnread = async () => {
+  try {
+    await window.adminApi('mark_all_feedback_unread', {});
+    window._manageFeedback.forEach(f=>f.is_read=false);
+    window.showToast('All marked as unread');
+    window.render();
+  } catch(err) { window.showToast(translateErr(err.message), 'error'); }
 };
 
 function buildManage(){
@@ -1759,7 +2065,9 @@ function buildManage(){
     if (!window._feedbackLoaded && !window._isFeedbackLoading && !window._feedbackError) setTimeout(window.loadManageFeedback, 50);
   }
 
+  const feedbackUnread = window._manageFeedback.filter(f=>!f.is_read).length;
   let content = '';
+
   if (isUsersView) {
     if (window._isManageLoading && !window._manageLoaded) {
       content = `<div class="p-10 text-center text-slate-500 text-sm font-medium flex flex-col items-center justify-center min-h-[50vh]"><i data-lucide="loader-2" class="w-8 h-8 animate-spin mb-4 mx-auto text-vIndigo"></i>Fetching data...</div>`;
@@ -1807,8 +2115,34 @@ function buildManage(){
         <button onclick="window.loadManageFeedback()" class="px-5 py-2.5 rounded-xl bg-vIndigo text-white text-xs font-bold shadow-md active:scale-95 transition-transform">Retry</button>
       </div>`;
     } else {
-      content = window._manageFeedback.map(f=>`
-        <div onclick="window.showFeedbackDetail('${f.id}')" class="glass rounded-[24px] p-4 shadow-sm cursor-pointer active:scale-[0.99] transition-transform">
+      let list = window._manageFeedback.slice();
+      if (window._feedbackRatingFilter !== 'all') {
+        const rf = Number(window._feedbackRatingFilter);
+        list = list.filter(f => f.rating === rf);
+      }
+      if (window._feedbackSortMode === 'rating_high') list.sort((a,b)=>(b.rating||0)-(a.rating||0));
+      else if (window._feedbackSortMode === 'rating_low') list.sort((a,b)=>(a.rating||0)-(b.rating||0));
+      else list.sort((a,b)=> new Date(b.created_at)-new Date(a.created_at));
+
+      const controls = `
+        <div class="flex flex-wrap gap-2 mb-3">
+          ${['all',1,2,3,4,5].map(v => `<button onclick="window.setFeedbackRatingFilter('${v}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${String(window._feedbackRatingFilter)===String(v)?'bg-vGold text-[#04150c] border-vGold':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">${v==='all'?'All':'★'+v}</button>`).join('')}
+        </div>
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button onclick="window.setFeedbackSortMode('newest')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${window._feedbackSortMode==='newest'?'bg-vIndigo text-white border-vIndigo':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Newest</button>
+          <button onclick="window.setFeedbackSortMode('rating_high')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${window._feedbackSortMode==='rating_high'?'bg-vIndigo text-white border-vIndigo':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Rating ↓</button>
+          <button onclick="window.setFeedbackSortMode('rating_low')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${window._feedbackSortMode==='rating_low'?'bg-vIndigo text-white border-vIndigo':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Rating ↑</button>
+        </div>
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button onclick="window.markAllFeedbackRead()" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-vEmerald/10 text-vEmerald border border-vEmerald/20">Mark all read</button>
+          <button onclick="window.markAllFeedbackUnread()" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20">Mark all unread</button>
+          ${window._manageFeedback.length ? `<button onclick="window.deleteAllFeedback()" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-vRose/10 text-vRose border border-vRose/20">Delete all</button>` : ''}
+        </div>
+      `;
+
+      content = controls + (list.map(f=>`
+        <div onclick="window.showFeedbackDetail('${f.id}')" class="glass rounded-[24px] p-4 shadow-sm cursor-pointer active:scale-[0.99] transition-transform relative ${!f.is_read?'border border-vEmerald/40':''}">
+          ${!f.is_read ? `<span class="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-vEmerald shadow-[0_0_6px_rgba(18,183,106,0.8)]"></span>` : ''}
           <div class="flex items-start gap-3">
             <img src="${f.avatar_url || 'https://api.dicebear.com/7.x/initials/svg?seed='+encodeURIComponent(f.full_name||'U')}" class="w-10 h-10 rounded-full object-cover border shadow-sm shrink-0">
             <div class="min-w-0 flex-1">
@@ -1816,11 +2150,20 @@ function buildManage(){
                 <p class="font-bold text-[13px] truncate">${f.full_name}</p>
                 <p class="text-[9px] text-slate-400 shrink-0">${new Date(f.created_at).toLocaleDateString()}</p>
               </div>
-              <p class="text-[10px] text-slate-500 truncate mb-1.5">${f.email}</p>
+              <p class="text-[10px] text-slate-500 truncate mb-1">${f.email}</p>
+              ${f.rating ? `<div class="flex gap-0.5 mb-1">${[1,2,3,4,5].map(i=>`<svg class="w-3 h-3 ${i<=f.rating?'text-vGold':'text-slate-300 dark:text-slate-700'}" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14l-5-4.87 7.1-1.01L12 2z"/></svg>`).join('')}</div>` : ''}
               <p class="text-[12px] text-slate-600 dark:text-slate-300 line-clamp-2">${f.message}</p>
+              ${f.admin_reply ? `<p class="text-[10px] text-vIndigo font-bold mt-1">↳ Replied</p>` : ''}
             </div>
           </div>
-        </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">No feedback yet.</div>`;
+          <div class="flex gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+            ${f.is_read
+              ? `<button onclick="window.markFeedbackUnread('${f.id}', event)" class="flex-1 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500 text-[10px] font-bold">Mark unread</button>`
+              : `<button onclick="window.markFeedbackRead('${f.id}', event)" class="flex-1 py-1.5 rounded-lg bg-vEmerald/10 text-vEmerald text-[10px] font-bold">Mark read</button>`
+            }
+            <button onclick="event.stopPropagation(); window.deleteFeedbackItem('${f.id}')" class="flex-1 py-1.5 rounded-lg bg-vRose/10 text-vRose text-[10px] font-bold">Delete</button>
+          </div>
+        </div>`).join('') || `<div class="p-10 text-center text-slate-500 text-sm font-medium">No feedback yet.</div>`);
     }
   }
 
@@ -1831,7 +2174,10 @@ function buildManage(){
   </div>
   <div class="flex gap-2 mb-4">
     <button onclick="window.switchManageView('users')" class="px-4 py-2 rounded-xl text-[11px] font-bold border transition-colors ${isUsersView?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Users</button>
-    <button onclick="window.switchManageView('feedback')" class="px-4 py-2 rounded-xl text-[11px] font-bold border transition-colors ${!isUsersView?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">Feedback</button>
+    <button onclick="window.switchManageView('feedback')" class="relative px-4 py-2 rounded-xl text-[11px] font-bold border transition-colors ${!isUsersView?'bg-vEmerald text-[#04150c] border-vEmerald':'bg-white/50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500'}">
+      Feedback
+      ${feedbackUnread>0?`<span class="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-vRose text-white text-[9px] font-bold flex items-center justify-center">${badgeText(feedbackUnread)}</span>`:''}
+    </button>
   </div>
   <div class="space-y-4 fade-in">
     ${content}
@@ -1918,6 +2264,8 @@ async function boot() {
 
     finishBoot();
     window.loadTxns(true);
+    window.refreshMyFeedbackBadge().then(() => window.render());
+    if (window.adminToken) window.loadManageFeedback();
   };
 
   try {
